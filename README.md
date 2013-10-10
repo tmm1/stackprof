@@ -27,7 +27,7 @@ samples are taken using a combination of two new C-APIs in ruby 2.1:
 
   - stack frames are collected via `rb_profile_frames`, which provides low-overhead C-API access
     to the VM's call stack. no object allocations occur in this path, allowing stackprof to collect
-    callstacks for in allocation mode.
+    callstacks even in allocation mode.
 
 ### aggregation
 
