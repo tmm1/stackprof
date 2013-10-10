@@ -53,13 +53,13 @@ module StackProf
         next unless info[:name] =~ name
         file, line = info.values_at(:file, :line)
 
-        line = line.to_i - 1
         maxline = info[:lines] ? info[:lines].keys.max : line + 5
         printf "%s (%s:%d)\n", info[:name], file, line
 
+        lines = info[:lines]
         source = File.readlines(file).each_with_index do |code, i|
-          next unless (line..maxline).include?(i)
-          if samples = info[:lines][i+1]
+          next unless (line-1..maxline).include?(i)
+          if lines and samples = lines[i+1]
             printf "% 5d % 7s / % 7s  | % 5d  | %s", samples, "(%2.1f%%" % (100.0*samples/overall_samples), "%2.1f%%)" % (100.0*samples/info[:samples]), i+1, code
           else
             printf "                         | % 5d  | %s", i+1, code
