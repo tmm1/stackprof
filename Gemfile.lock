@@ -1,0 +1,18 @@
+PATH
+  remote: .
+  specs:
+    stackprof (0.1.0)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    rake (10.1.0)
+    rake-compiler (0.9.1)
+      rake
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  rake-compiler
+  stackprof!
