@@ -93,7 +93,7 @@ three reporting modes are supported:
 
 `StackProf::Report.new(data).print_graphviz`
 
-![](http://cl.ly/image/2f351W161c1c/content)
+![](http://cl.ly/image/2t3l2q0l0B0A/content)
 
 ```
 digraph profile {
