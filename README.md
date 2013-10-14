@@ -72,7 +72,7 @@ three reporting modes are supported:
   - dotgraph
   - source annotation
 
-#### text: `StackProf::Report.new(data).print_text`
+#### `StackProf::Report.new(data).print_text`
 
 ```
      TOTAL    (pct)     SAMPLES    (pct)     FRAME
@@ -87,7 +87,7 @@ three reporting modes are supported:
        188 (100.0%)           0   (0.0%)     <main>
 ```
 
-#### dotgraph: `StackProf::Report.new(data).print_graphviz`
+#### `StackProf::Report.new(data).print_graphviz`
 
 ![](http://cl.ly/image/2t3l2q0l0B0A/content)
 
@@ -113,7 +113,7 @@ digraph profile {
 }
 ```
 
-#### source annotation: `StackProf::Report.new(data).print_source(/pow|newobj|math/)`
+#### `StackProf::Report.new(data).print_source(/pow|newobj|math/)`
 
 ```
 A#pow (/Users/tmm1/code/stackprof/sample.rb:11)
