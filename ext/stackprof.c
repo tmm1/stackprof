@@ -45,6 +45,7 @@ static VALUE sym_object, sym_wall, sym_name, sym_file, sym_line;
 static VALUE sym_samples, sym_total_samples, sym_edges, sym_lines;
 static VALUE sym_version, sym_mode, sym_frames;
 static VALUE objtracer;
+static VALUE gc_hook;
 
 static void stackprof_newobj_handler(VALUE, void*);
 static void stackprof_signal_handler(int sig, siginfo_t* sinfo, void* ucontext);
@@ -274,6 +275,21 @@ stackprof_newobj_handler(VALUE tpval, void *data)
     stackprof_job_handler(0);
 }
 
+static int
+frame_mark_i(st_data_t key, st_data_t val, st_data_t arg)
+{
+    VALUE frame = (VALUE)key;
+    rb_gc_mark_maybe(frame);
+    return ST_CONTINUE;
+}
+
+static void
+stackprof_gc_mark()
+{
+    if (_results.frames)
+	st_foreach(_results.frames, frame_mark_i, 0);
+}
+
 void
 Init_stackprof(void)
 {
@@ -289,6 +305,9 @@ Init_stackprof(void)
     sym_version = ID2SYM(rb_intern("version"));
     sym_mode = ID2SYM(rb_intern("mode"));
     sym_frames = ID2SYM(rb_intern("frames"));
+
+    gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, NULL);
+    rb_global_variable(&gc_hook);
 
     VALUE rb_mStackProf = rb_define_module("StackProf");
     rb_define_singleton_method(rb_mStackProf, "run", stackprof_run, 2);
