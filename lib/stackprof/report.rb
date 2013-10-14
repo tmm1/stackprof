@@ -47,7 +47,7 @@ module StackProf
       end
     end
 
-    def print_method(name)
+    def print_source(name)
       name = /#{Regexp.escape name}/ unless Regexp === name
       frames.each do |frame, info|
         next unless info[:name] =~ name

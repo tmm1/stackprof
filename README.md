@@ -72,9 +72,7 @@ three reporting modes are supported:
   - dotgraph
   - source annotation
 
-#### text
-
-`StackProf::Report.new(data).print_text`
+#### text: `StackProf::Report.new(data).print_text`
 
 ```
      TOTAL    (pct)     SAMPLES    (pct)     FRAME
@@ -89,9 +87,7 @@ three reporting modes are supported:
        188 (100.0%)           0   (0.0%)     <main>
 ```
 
-#### dotgraph
-
-`StackProf::Report.new(data).print_graphviz`
+#### dotgraph: `StackProf::Report.new(data).print_graphviz`
 
 ![](http://cl.ly/image/2t3l2q0l0B0A/content)
 
@@ -117,9 +113,7 @@ digraph profile {
 }
 ```
 
-#### source annotation
-
-`StackProf::Report.new(data).print_method(/pow|newobj|math/)`
+#### source annotation: `StackProf::Report.new(data).print_source(/pow|newobj|math/)`
 
 ```
 A#pow (/Users/tmm1/code/stackprof/sample.rb:11)
@@ -131,14 +125,14 @@ A.newobj (/Users/tmm1/code/stackprof/sample.rb:15)
    33  (17.6% /  56.9%)  |    16  |     Object.new
    25  (13.3% /  43.1%)  |    17  |     Object.new
                          |    18  |   end
-block in A#math (/Users/tmm1/code/stackprof/sample.rb:21)
-                         |    21  |     2.times do
-   34  (18.1% / 100.0%)  |    22  |       2 + 3 * 4 ^ 5 / 6
-                         |    23  |     end
 A#math (/Users/tmm1/code/stackprof/sample.rb:20)
                          |    20  |   def math
     1   (0.5% / 100.0%)  |    21  |     2.times do
                          |    22  |       2 + 3 * 4 ^ 5 / 6
+block in A#math (/Users/tmm1/code/stackprof/sample.rb:21)
+                         |    21  |     2.times do
+   34  (18.1% / 100.0%)  |    22  |       2 + 3 * 4 ^ 5 / 6
+                         |    23  |     end
 ```
 
 ### usage
@@ -156,8 +150,8 @@ this profile data structure is part of the public API, and is intended to be sav
 (as json/marshal for example) for later processing. the reports above can be generated
 by passing this structure into `StackProf::Report.new`.
 
-the format itself is very simple. it contains a header, and a list of frames. each frame has a unique id and
-identifying information such as the name, file, line. the frame also contains sampling data, including per-line
+the format itself is very simple. it contains a header and a list of frames. each frame has a unique id and
+identifying information such as its name, file and line. the frame also contains sampling data, including per-line
 samples, and a list of relationships to other frames represented as weighted edges.
 
 ```
@@ -182,16 +176,22 @@ samples, and a list of relationships to other frames represented as weighted edg
      :lines=>{8=>1}},
 ```
 
+above, `A#pow` was involved in 91 samples, and in all cases it was at the top of the stack on line 12.
+
+`A#initialize` was in 185 samples, but it was at the top of the stack in only 1 sample. the rest of the samples are
+divided up between its callee edges. all 91 calls to `A#pow` came from `A#initialize`, as seen by the edge numbered
+`70346498324780`.
+
 ### advanced usage
 
 the profiler can be started, paused, resumed and stopped manually for greater control.
 
 ```
+StackProf.running?
 StackProf.start
 StackProf.pause
 StackProf.paused?
 StackProf.resume
-StackProf.running?
 StackProf.stop
 StackProf.results
 ```
