@@ -15,6 +15,7 @@
 #include <ruby/ruby.h>
 #include <ruby/debug.h>
 #include <ruby/st.h>
+#include <signal.h>
 #include <sys/time.h>
 
 #define BUF_SIZE 2048
@@ -53,6 +54,9 @@ static void stackprof_signal_handler(int sig, siginfo_t* sinfo, void* ucontext);
 static VALUE
 stackprof_start(VALUE self, VALUE type, VALUE usec)
 {
+    struct sigaction sa;
+    struct itimerval timer;
+
     if (type == sym_object) {
 	_results.type = PROF_OBJECT;
 	objtracer = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, stackprof_newobj_handler, 0);
@@ -63,13 +67,11 @@ stackprof_start(VALUE self, VALUE type, VALUE usec)
 	else
 	    _results.type = PROF_CPU;
 
-	struct sigaction sa;
 	sa.sa_sigaction = stackprof_signal_handler;
 	sa.sa_flags = SA_RESTART | SA_SIGINFO;
 	sigemptyset(&sa.sa_mask);
 	sigaction(_results.type == PROF_WALL ? SIGALRM : SIGPROF, &sa, NULL);
 
-	struct itimerval timer;
 	timer.it_interval.tv_sec = 0;
 	timer.it_interval.tv_usec = NUM2LONG(usec);
 	timer.it_value = timer.it_interval;
@@ -82,14 +84,15 @@ stackprof_start(VALUE self, VALUE type, VALUE usec)
 static VALUE
 stackprof_stop(VALUE self)
 {
+    struct sigaction sa;
+    struct itimerval timer;
+
     if (_results.type == PROF_OBJECT) {
 	rb_tracepoint_disable(objtracer);
     } else {
-	struct itimerval timer;
 	memset(&timer, 0, sizeof(timer));
 	setitimer(_results.type == PROF_WALL ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
 
-	struct sigaction sa;
 	sa.sa_handler = SIG_IGN;
 	sa.sa_flags = SA_RESTART;
 	sigemptyset(&sa.sa_mask);
@@ -127,7 +130,6 @@ frame_i(st_data_t key, st_data_t val, st_data_t arg)
     VALUE results = (VALUE)arg;
     VALUE details = rb_hash_new();
     VALUE name, file, edges, lines;
-    VALUE label, method_name;
     VALUE line;
 
     rb_hash_aset(results, rb_obj_id(frame), details);
@@ -222,8 +224,7 @@ static void
 stackprof_sample()
 {
     int num, i;
-    VALUE prev_frame;
-    st_data_t key;
+    VALUE prev_frame = Qnil;
 
     _results.overall_samples++;
     num = rb_profile_frames(0, sizeof(_results.frames_buffer), _results.frames_buffer, _results.lines_buffer);
@@ -293,6 +294,8 @@ stackprof_gc_mark()
 void
 Init_stackprof(void)
 {
+    VALUE rb_mStackProf;
+
     sym_object = ID2SYM(rb_intern("object"));
     sym_name = ID2SYM(rb_intern("name"));
     sym_wall = ID2SYM(rb_intern("wall"));
@@ -309,7 +312,7 @@ Init_stackprof(void)
     gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, NULL);
     rb_global_variable(&gc_hook);
 
-    VALUE rb_mStackProf = rb_define_module("StackProf");
+    rb_mStackProf = rb_define_module("StackProf");
     rb_define_singleton_method(rb_mStackProf, "run", stackprof_run, 2);
     rb_autoload(rb_mStackProf, rb_intern_const("Report"), "stackprof/report.rb");
 }
