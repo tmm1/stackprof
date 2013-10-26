@@ -18,8 +18,7 @@ module StackProf
       pp @data
     end
 
-    def print_graphviz
-      f = STDOUT
+    def print_graphviz(f = STDOUT)
       f.puts "digraph profile {"
       frames.each do |frame, info|
         call, total = info.values_at(:samples, :total_samples)
@@ -39,30 +38,30 @@ module StackProf
       f.puts "}"
     end
 
-    def print_text
-      printf "% 10s    (pct)  % 10s    (pct)     FRAME\n" % ["TOTAL", "SAMPLES"]
+    def print_text(f = STDOUT)
+      f.printf "% 10s    (pct)  % 10s    (pct)     FRAME\n" % ["TOTAL", "SAMPLES"]
       frames.each do |frame, info|
         call, total = info.values_at(:samples, :total_samples)
-        printf "% 10d % 8s  % 10d % 8s     %s\n", total, "(%2.1f%%)" % (total*100.0/overall_samples), call, "(%2.1f%%)" % (call*100.0/overall_samples), info[:name]
+        f.printf "% 10d % 8s  % 10d % 8s     %s\n", total, "(%2.1f%%)" % (total*100.0/overall_samples), call, "(%2.1f%%)" % (call*100.0/overall_samples), info[:name]
       end
     end
 
-    def print_source(name)
+    def print_source(name, f = STDOUT)
       name = /#{Regexp.escape name}/ unless Regexp === name
       frames.each do |frame, info|
         next unless info[:name] =~ name
         file, line = info.values_at(:file, :line)
 
         maxline = info[:lines] ? info[:lines].keys.max : line + 5
-        printf "%s (%s:%d)\n", info[:name], file, line
+        f.printf "%s (%s:%d)\n", info[:name], file, line
 
         lines = info[:lines]
         source = File.readlines(file).each_with_index do |code, i|
           next unless (line-1..maxline).include?(i)
           if lines and samples = lines[i+1]
-            printf "% 5d % 7s / % 7s  | % 5d  | %s", samples, "(%2.1f%%" % (100.0*samples/overall_samples), "%2.1f%%)" % (100.0*samples/info[:samples]), i+1, code
+            f.printf "% 5d % 7s / % 7s  | % 5d  | %s", samples, "(%2.1f%%" % (100.0*samples/overall_samples), "%2.1f%%)" % (100.0*samples/info[:samples]), i+1, code
           else
-            printf "                         | % 5d  | %s", i+1, code
+            f.printf "                         | % 5d  | %s", i+1, code
           end
         end
       end
