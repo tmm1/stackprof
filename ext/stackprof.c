@@ -35,6 +35,7 @@ static struct {
 	PROF_OBJECT
     } type;
 
+    size_t overall_signals;
     size_t overall_samples;
     st_table *frames;
 
@@ -43,7 +44,7 @@ static struct {
 } _results;
 
 static VALUE sym_object, sym_wall, sym_name, sym_file, sym_line;
-static VALUE sym_samples, sym_total_samples, sym_edges, sym_lines;
+static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_lines;
 static VALUE sym_version, sym_mode, sym_frames;
 static VALUE objtracer;
 static VALUE gc_hook;
@@ -175,6 +176,7 @@ stackprof_run(VALUE self, VALUE type, VALUE usec)
     rb_need_block();
     if (!_results.frames)
 	_results.frames = st_init_numtable();
+    _results.overall_signals = 0;
     _results.overall_samples = 0;
 
     stackprof_start(self, type, usec);
@@ -185,6 +187,7 @@ stackprof_run(VALUE self, VALUE type, VALUE usec)
     rb_hash_aset(results, sym_version, DBL2NUM(1.0));
     rb_hash_aset(results, sym_mode, rb_sprintf("%"PRIsVALUE"(%"PRIsVALUE")", type, usec));
     rb_hash_aset(results, sym_samples, SIZET2NUM(_results.overall_samples));
+    rb_hash_aset(results, sym_missed_samples, SIZET2NUM(_results.overall_signals - _results.overall_samples));
 
     frames = rb_hash_new();
     rb_hash_aset(results, sym_frames, frames);
@@ -267,6 +270,7 @@ stackprof_job_handler(void *data)
 static void
 stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 {
+    _results.overall_signals++;
     rb_postponed_job_register_one(0, stackprof_job_handler, 0);
 }
 
@@ -302,6 +306,7 @@ Init_stackprof(void)
     sym_file = ID2SYM(rb_intern("file"));
     sym_line = ID2SYM(rb_intern("line"));
     sym_total_samples = ID2SYM(rb_intern("total_samples"));
+    sym_missed_samples = ID2SYM(rb_intern("missed_samples"));
     sym_samples = ID2SYM(rb_intern("samples"));
     sym_edges = ID2SYM(rb_intern("edges"));
     sym_lines = ID2SYM(rb_intern("lines"));
