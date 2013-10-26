@@ -27,10 +27,11 @@ class StackProfTest < Test::Unit::TestCase
   end
 
   def test_cputime
-    profile = StackProf.run(:cpu, 1000) do
+    profile = StackProf.run(:cpu, 500) do
       math
     end
 
+    assert_operator profile[:samples], :>, 1
     frame = profile[:frames].values.first
     assert_equal "block in StackProfTest#math", frame[:name]
   end
@@ -52,6 +53,10 @@ class StackProfTest < Test::Unit::TestCase
   end
 
   def idle
-    sleep 0.2
+    r, w = IO.pipe
+    IO.select([r], nil, nil, 0.2)
+  ensure
+    r.close
+    w.close
   end
 end
