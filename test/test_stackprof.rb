@@ -6,8 +6,26 @@ class StackProfTest < Test::Unit::TestCase
   def test_info
     profile = StackProf.run(:wall, 1000){}
     assert_equal 1.0, profile[:version]
-    assert_equal "wall(1000)", profile[:mode]
+    assert_equal :wall, profile[:mode]
+    assert_equal 1000, profile[:interval]
     assert_equal 0, profile[:samples]
+  end
+
+  def test_running
+    assert_equal false, StackProf.running?
+    StackProf.run(:wall, 1000){ assert_equal true, StackProf.running? }
+  end
+
+  def test_start_stop_results
+    assert_equal nil, StackProf.results
+    assert_equal true, StackProf.start(:wall, 1000)
+    assert_equal false, StackProf.start(:wall, 1000)
+    assert_equal true, StackProf.running?
+    assert_equal true, StackProf.stop
+    assert_equal false, StackProf.stop
+    assert_equal false, StackProf.running?
+    assert_kind_of Hash, StackProf.results
+    assert_equal nil, StackProf.results
   end
 
   def test_object_allocation
@@ -15,15 +33,17 @@ class StackProfTest < Test::Unit::TestCase
       Object.new
       Object.new
     end
-    assert_equal "object(1)", profile[:mode]
+    assert_equal :object, profile[:mode]
+    assert_equal 1, profile[:interval]
     assert_equal 2, profile[:samples]
 
     frame = profile[:frames].values.first
     assert_equal "block in StackProfTest#test_object_allocation", frame[:name]
     assert_equal 2, frame[:samples]
-    assert_equal 14, frame[:line]
-    assert_equal 1, frame[:lines][15]
-    assert_equal 1, frame[:lines][16]
+    line = __LINE__
+    assert_equal line-11, frame[:line]
+    assert_equal 1, frame[:lines][line-10]
+    assert_equal 1, frame[:lines][line-9]
   end
 
   def test_cputime

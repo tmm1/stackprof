@@ -156,8 +156,10 @@ samples, and a list of relationships to other frames represented as weighted edg
 
 ```
 {:version=>1.0,
- :mode=>"cpu(1000)",
+ :mode=>:cpu,
+ :inteval=>1000,
  :samples=>188,
+ :missed_samples=>0,
  :frames=>
   {70346498324780=>
     {:name=>"A#pow",
@@ -184,14 +186,12 @@ divided up between its callee edges. all 91 calls to `A#pow` came from `A#initia
 
 ### advanced usage
 
-the profiler can be started, paused, resumed and stopped manually for greater control.
+the profiler can be started and stopped manually. results are accumulated until retrieval, across
+multiple start/stop invocations.
 
 ```
 StackProf.running?
 StackProf.start
-StackProf.pause
-StackProf.paused?
-StackProf.resume
 StackProf.stop
 StackProf.results
 ```
