@@ -50,13 +50,22 @@ static void stackprof_newobj_handler(VALUE, void*);
 static void stackprof_signal_handler(int sig, siginfo_t* sinfo, void* ucontext);
 
 static VALUE
-stackprof_start(VALUE self, VALUE mode, VALUE interval)
+stackprof_start(int argc, VALUE *argv, VALUE self)
 {
     struct sigaction sa;
     struct itimerval timer;
+    VALUE opts = Qnil, mode = Qnil, interval = Qnil;
 
     if (_stackprof.running)
 	return Qfalse;
+
+    rb_scan_args(argc, argv, "0:", &opts);
+
+    if (RTEST(opts)) {
+	mode = rb_hash_aref(opts, sym_mode);
+	interval = rb_hash_aref(opts, sym_interval);
+    }
+    if (!RTEST(mode)) mode = sym_wall;
 
     if (!_stackprof.frames) {
 	_stackprof.frames = st_init_numtable();
@@ -65,9 +74,13 @@ stackprof_start(VALUE self, VALUE mode, VALUE interval)
     }
 
     if (mode == sym_object) {
+	if (!RTEST(interval)) interval = INT2FIX(1);
+
 	objtracer = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, stackprof_newobj_handler, 0);
 	rb_tracepoint_enable(objtracer);
     } else if (mode == sym_wall || mode == sym_cpu) {
+	if (!RTEST(interval)) interval = INT2FIX(1000);
+
 	sa.sa_sigaction = stackprof_signal_handler;
 	sa.sa_flags = SA_RESTART | SA_SIGINFO;
 	sigemptyset(&sa.sa_mask);
@@ -184,7 +197,7 @@ stackprof_results(VALUE self)
 {
     VALUE results, frames;
 
-    if (!_stackprof.frames)
+    if (!_stackprof.frames || _stackprof.running)
 	return Qnil;
 
     results = rb_hash_new();
@@ -205,10 +218,10 @@ stackprof_results(VALUE self)
 }
 
 static VALUE
-stackprof_run(VALUE self, VALUE mode, VALUE interval)
+stackprof_run(int argc, VALUE *argv, VALUE self)
 {
     rb_need_block();
-    stackprof_start(self, mode, interval);
+    stackprof_start(argc, argv, self);
     rb_ensure(rb_yield, Qundef, stackprof_stop, self);
     return stackprof_results(self);
 }
@@ -346,8 +359,8 @@ Init_stackprof(void)
     rb_mStackProf = rb_define_module("StackProf");
     rb_autoload(rb_mStackProf, rb_intern_const("Report"), "stackprof/report.rb");
     rb_define_singleton_method(rb_mStackProf, "running?", stackprof_running_p, 0);
-    rb_define_singleton_method(rb_mStackProf, "run", stackprof_run, 2);
-    rb_define_singleton_method(rb_mStackProf, "start", stackprof_start, 2);
+    rb_define_singleton_method(rb_mStackProf, "run", stackprof_run, -1);
+    rb_define_singleton_method(rb_mStackProf, "start", stackprof_start, -1);
     rb_define_singleton_method(rb_mStackProf, "stop", stackprof_stop, 0);
     rb_define_singleton_method(rb_mStackProf, "results", stackprof_results, 0);
 }

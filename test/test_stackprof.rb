@@ -4,7 +4,7 @@ require 'test/unit'
 
 class StackProfTest < Test::Unit::TestCase
   def test_info
-    profile = StackProf.run(:wall, 1000){}
+    profile = StackProf.run{}
     assert_equal 1.0, profile[:version]
     assert_equal :wall, profile[:mode]
     assert_equal 1000, profile[:interval]
@@ -13,14 +13,15 @@ class StackProfTest < Test::Unit::TestCase
 
   def test_running
     assert_equal false, StackProf.running?
-    StackProf.run(:wall, 1000){ assert_equal true, StackProf.running? }
+    StackProf.run{ assert_equal true, StackProf.running? }
   end
 
   def test_start_stop_results
     assert_equal nil, StackProf.results
-    assert_equal true, StackProf.start(:wall, 1000)
-    assert_equal false, StackProf.start(:wall, 1000)
+    assert_equal true, StackProf.start
+    assert_equal false, StackProf.start
     assert_equal true, StackProf.running?
+    assert_equal nil, StackProf.results
     assert_equal true, StackProf.stop
     assert_equal false, StackProf.stop
     assert_equal false, StackProf.running?
@@ -29,7 +30,7 @@ class StackProfTest < Test::Unit::TestCase
   end
 
   def test_object_allocation
-    profile = StackProf.run(:object, 1) do
+    profile = StackProf.run(mode: :object) do
       Object.new
       Object.new
     end
@@ -47,7 +48,7 @@ class StackProfTest < Test::Unit::TestCase
   end
 
   def test_cputime
-    profile = StackProf.run(:cpu, 500) do
+    profile = StackProf.run(mode: :cpu, interval: 500) do
       math
     end
 
@@ -57,7 +58,7 @@ class StackProfTest < Test::Unit::TestCase
   end
 
   def test_walltime
-    profile = StackProf.run(:wall, 1000) do
+    profile = StackProf.run(mode: :wall) do
       idle
     end
 

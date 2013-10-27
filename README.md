@@ -9,14 +9,14 @@ and written as a replacement for [perftools.rb](https://github.com/tmm1/perftool
 
 three sampling modes are supported:
 
-  - cpu time (using `ITIMER_PROF` and `SIGPROF`)
-  - wall time (using `ITIMER_REAL` and `SIGALRM`)
-  - object allocation (using `RUBY_INTERNAL_EVENT_NEWOBJ`)
+  - :wall (using `ITIMER_REAL` and `SIGALRM`) [default mode]
+  - :cpu (using `ITIMER_PROF` and `SIGPROF`)
+  - :object (using `RUBY_INTERNAL_EVENT_NEWOBJ`)
 
 samplers have a tuneable interval which can be used to reduce overhead or increase granularity:
 
-  - cpu time: sample every _interval_ microseconds of cpu activity (default: 10000 = 10 milliseconds)
-  - wall time: sample every _interval_ microseconds of wallclock time (default: 10000)
+  - wall time: sample every _interval_ microseconds of wallclock time (default: 1000)
+  - cpu time: sample every _interval_ microseconds of cpu activity (default: 1000 = 1 millisecond)
   - object allocation: sample every _interval_ allocations (default: 1)
 
 samples are taken using a combination of three new C-APIs in ruby 2.1:
@@ -137,11 +137,12 @@ block in A#math (/Users/tmm1/code/stackprof/sample.rb:21)
 
 ### usage
 
-the profiler is compiled as a C-extension and exposes a simple api: `StackProf.run(mode, interval)`.
+the profiler is compiled as a C-extension and exposes a simple api: `StackProf.run(mode: [:cpu|:wall|:object])`.
 the `run` method takes a block of code and returns a profile as a simple hash.
 
 ``` ruby
-profile = StackProf.run(sampling_mode, sampling_interval) do
+# sample after every 1ms of cpu activity
+profile = StackProf.run(mode: :cpu, interval: 1000) do
   MyCode.execute
 end
 ```
@@ -154,7 +155,7 @@ the format itself is very simple. it contains a header and a list of frames. eac
 identifying information such as its name, file and line. the frame also contains sampling data, including per-line
 samples, and a list of relationships to other frames represented as weighted edges.
 
-```
+``` ruby
 {:version=>1.0,
  :mode=>:cpu,
  :inteval=>1000,
@@ -189,7 +190,7 @@ divided up between its callee edges. all 91 calls to `A#pow` came from `A#initia
 the profiler can be started and stopped manually. results are accumulated until retrieval, across
 multiple start/stop invocations.
 
-```
+``` ruby
 StackProf.running?
 StackProf.start
 StackProf.stop
