@@ -299,6 +299,7 @@ stackprof_job_handler(void *data)
 {
     static int in_signal_handler = 0;
     if (in_signal_handler) return;
+    if (!_stackprof.running) return;
 
     in_signal_handler++;
     stackprof_sample();
