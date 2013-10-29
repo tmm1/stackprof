@@ -17,6 +17,7 @@
 #include <ruby/st.h>
 #include <signal.h>
 #include <sys/time.h>
+#include <pthread.h>
 
 #define BUF_SIZE 2048
 
@@ -45,6 +46,7 @@ static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_
 static VALUE sym_version, sym_mode, sym_interval, sym_frames;
 static VALUE objtracer;
 static VALUE gc_hook;
+static VALUE rb_mStackProf;
 
 static void stackprof_newobj_handler(VALUE, void*);
 static void stackprof_signal_handler(int sig, siginfo_t* sinfo, void* ucontext);
@@ -332,11 +334,41 @@ stackprof_gc_mark(void *data)
 	st_foreach(_stackprof.frames, frame_mark_i, 0);
 }
 
+static void
+stackprof_atfork_prepare(void)
+{
+    struct itimerval timer;
+    if (_stackprof.running) {
+	if (_stackprof.mode == sym_wall || _stackprof.mode == sym_cpu) {
+	    memset(&timer, 0, sizeof(timer));
+	    setitimer(_stackprof.mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
+	}
+    }
+}
+
+static void
+stackprof_atfork_parent(void)
+{
+    struct itimerval timer;
+    if (_stackprof.running) {
+	if (_stackprof.mode == sym_wall || _stackprof.mode == sym_cpu) {
+	    timer.it_interval.tv_sec = 0;
+	    timer.it_interval.tv_usec = NUM2LONG(_stackprof.interval);
+	    timer.it_value = timer.it_interval;
+	    setitimer(_stackprof.mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
+	}
+    }
+}
+
+static void
+stackprof_atfork_child(void)
+{
+    stackprof_stop(rb_mStackProf);
+}
+
 void
 Init_stackprof(void)
 {
-    VALUE rb_mStackProf;
-
     sym_object = ID2SYM(rb_intern("object"));
     sym_wall = ID2SYM(rb_intern("wall"));
     sym_cpu = ID2SYM(rb_intern("cpu"));
@@ -363,4 +395,6 @@ Init_stackprof(void)
     rb_define_singleton_method(rb_mStackProf, "start", stackprof_start, -1);
     rb_define_singleton_method(rb_mStackProf, "stop", stackprof_stop, 0);
     rb_define_singleton_method(rb_mStackProf, "results", stackprof_results, 0);
+
+    pthread_atfork(stackprof_atfork_prepare, stackprof_atfork_parent, stackprof_atfork_child);
 }

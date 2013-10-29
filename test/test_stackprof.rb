@@ -67,6 +67,17 @@ class StackProfTest < Test::Unit::TestCase
     assert_in_delta 200, frame[:samples], 5
   end
 
+  def test_fork
+    StackProf.run do
+      pid = fork do
+        exit! StackProf.running?? 1 : 0
+      end
+      Process.wait(pid)
+      assert_equal 0, $?.exitstatus
+      assert_equal true, StackProf.running?
+    end
+  end
+
   def math
     250_000.times do
       2 ** 10
