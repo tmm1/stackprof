@@ -35,6 +35,7 @@ static struct {
 
     size_t overall_signals;
     size_t overall_samples;
+    size_t during_gc;
     st_table *frames;
 
     VALUE frames_buffer[BUF_SIZE];
@@ -44,7 +45,7 @@ static struct {
 static VALUE sym_object, sym_wall, sym_cpu, sym_name, sym_file, sym_line;
 static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_lines;
 static VALUE sym_version, sym_mode, sym_interval, sym_frames;
-static VALUE objtracer;
+static VALUE sym_gc_samples, objtracer;
 static VALUE gc_hook;
 static VALUE rb_mStackProf;
 
@@ -73,6 +74,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	_stackprof.frames = st_init_numtable();
 	_stackprof.overall_signals = 0;
 	_stackprof.overall_samples = 0;
+	_stackprof.during_gc = 0;
     }
 
     if (mode == sym_object) {
@@ -207,6 +209,7 @@ stackprof_results(VALUE self)
     rb_hash_aset(results, sym_mode, _stackprof.mode);
     rb_hash_aset(results, sym_interval, _stackprof.interval);
     rb_hash_aset(results, sym_samples, SIZET2NUM(_stackprof.overall_samples));
+    rb_hash_aset(results, sym_gc_samples, SIZET2NUM(_stackprof.during_gc));
     rb_hash_aset(results, sym_missed_samples, SIZET2NUM(_stackprof.overall_signals - _stackprof.overall_samples));
 
     frames = rb_hash_new();
@@ -310,7 +313,10 @@ static void
 stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 {
     _stackprof.overall_signals++;
-    rb_postponed_job_register_one(0, stackprof_job_handler, 0);
+    if (rb_during_gc())
+	_stackprof.during_gc++, _stackprof.overall_samples++;
+    else
+	rb_postponed_job_register_one(0, stackprof_job_handler, 0);
 }
 
 static void
@@ -377,6 +383,7 @@ Init_stackprof(void)
     sym_file = ID2SYM(rb_intern("file"));
     sym_line = ID2SYM(rb_intern("line"));
     sym_total_samples = ID2SYM(rb_intern("total_samples"));
+    sym_gc_samples = ID2SYM(rb_intern("gc_samples"));
     sym_missed_samples = ID2SYM(rb_intern("missed_samples"));
     sym_samples = ID2SYM(rb_intern("samples"));
     sym_edges = ID2SYM(rb_intern("edges"));

@@ -78,6 +78,18 @@ class StackProfTest < Test::Unit::TestCase
     end
   end
 
+  def test_gc
+    profile = StackProf.run(interval: 100) do
+      5.times do
+        GC.start
+      end
+    end
+
+    assert_empty profile[:frames]
+    assert_operator profile[:gc_samples], :>, 0
+    assert_equal 0, profile[:missed_samples]
+  end
+
   def math
     250_000.times do
       2 ** 10
