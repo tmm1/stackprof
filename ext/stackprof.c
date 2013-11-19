@@ -397,12 +397,14 @@ Init_stackprof(void)
     rb_global_variable(&gc_hook);
 
     rb_mStackProf = rb_define_module("StackProf");
-    rb_autoload(rb_mStackProf, rb_intern_const("Report"), "stackprof/report.rb");
     rb_define_singleton_method(rb_mStackProf, "running?", stackprof_running_p, 0);
     rb_define_singleton_method(rb_mStackProf, "run", stackprof_run, -1);
     rb_define_singleton_method(rb_mStackProf, "start", stackprof_start, -1);
     rb_define_singleton_method(rb_mStackProf, "stop", stackprof_stop, 0);
     rb_define_singleton_method(rb_mStackProf, "results", stackprof_results, 0);
+
+    rb_autoload(rb_mStackProf, rb_intern_const("Report"), "stackprof/report.rb");
+    rb_autoload(rb_mStackProf, rb_intern_const("Middleware"), "stackprof/middleware.rb");
 
     pthread_atfork(stackprof_atfork_prepare, stackprof_atfork_parent, stackprof_atfork_child);
 }
