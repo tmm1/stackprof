@@ -1,7 +1,10 @@
+require 'fileutils'
+
 module StackProf
   class Middleware
     def initialize(app)
       @app = app
+      at_exit{ Middleware.save if Middleware.enabled? }
     end
 
     def call(env)
@@ -14,6 +17,15 @@ module StackProf
     class << self
       attr_accessor :enabled
       alias enabled? enabled
+
+      def save
+        if results = StackProf.results
+          FileUtils.mkdir_p('tmp')
+          File.open("tmp/stackprof-#{results[:mode]}-#{Process.pid}-#{Time.now.to_i}.dump", 'w') do |f|
+            f.write Marshal.dump(results)
+          end
+        end
+      end
     end
   end
 end
