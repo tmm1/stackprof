@@ -262,13 +262,24 @@ sample_for(VALUE frame)
     return frame_data;
 }
 
-void
-st_numtable_increment(st_table *table, st_data_t key)
+static int
+numtable_increment_callback(st_data_t *key, st_data_t *value, st_data_t arg, int existing)
 {
-    intptr_t weight = 0;
-    st_lookup(table, key, (st_data_t *)&weight);
-    weight++;
-    st_insert(table, key, weight);
+    uintptr_t *weight = (uintptr_t *)value;
+    uintptr_t increment = (uintptr_t)arg;
+
+    if (existing)
+	(*weight)++;
+    else
+	*weight = 1;
+
+    return ST_CONTINUE;
+}
+
+void
+st_numtable_increment(st_table *table, st_data_t key, uintptr_t increment)
+{
+    st_update(table, key, numtable_increment_callback, (st_data_t)increment);
 }
 
 void
@@ -292,12 +303,12 @@ stackprof_record_sample()
 	    if (line > 0) {
 		if (!frame_data->lines)
 		    frame_data->lines = st_init_numtable();
-		st_numtable_increment(frame_data->lines, (st_data_t)line);
+		st_numtable_increment(frame_data->lines, (st_data_t)line, 1);
 	    }
 	} else {
 	    if (!frame_data->edges)
 		frame_data->edges = st_init_numtable();
-	    st_numtable_increment(frame_data->edges, (st_data_t)prev_frame);
+	    st_numtable_increment(frame_data->edges, (st_data_t)prev_frame, 1);
 	}
 
 	prev_frame = frame;
