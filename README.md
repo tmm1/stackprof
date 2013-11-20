@@ -7,11 +7,12 @@ and written as a replacement for [perftools.rb](https://github.com/tmm1/perftool
 
 ### sampling
 
-three sampling modes are supported:
+four sampling modes are supported:
 
   - :wall (using `ITIMER_REAL` and `SIGALRM`) [default mode]
   - :cpu (using `ITIMER_PROF` and `SIGPROF`)
   - :object (using `RUBY_INTERNAL_EVENT_NEWOBJ`)
+  - :custom (user-defined via `StackProf.sample`)
 
 samplers have a tuneable interval which can be used to reduce overhead or increase granularity:
 

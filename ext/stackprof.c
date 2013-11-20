@@ -42,7 +42,7 @@ static struct {
     int lines_buffer[BUF_SIZE];
 } _stackprof;
 
-static VALUE sym_object, sym_wall, sym_cpu, sym_name, sym_file, sym_line;
+static VALUE sym_object, sym_wall, sym_cpu, sym_custom, sym_name, sym_file, sym_line;
 static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_lines;
 static VALUE sym_version, sym_mode, sym_interval, sym_frames;
 static VALUE sym_gc_samples, objtracer;
@@ -94,6 +94,9 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	timer.it_interval.tv_usec = NUM2LONG(interval);
 	timer.it_value = timer.it_interval;
 	setitimer(mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
+    } else if (mode == sym_custom) {
+	/* sampled manually */
+	interval = Qnil;
     } else {
 	rb_raise(rb_eArgError, "unknown profiler mode");
     }
@@ -125,6 +128,10 @@ stackprof_stop(VALUE self)
 	sa.sa_flags = SA_RESTART;
 	sigemptyset(&sa.sa_mask);
 	sigaction(_stackprof.mode == sym_wall ? SIGALRM : SIGPROF, &sa, NULL);
+    } else if (_stackprof.mode == sym_custom) {
+	/* sampled manually */
+    } else {
+	rb_raise(rb_eArgError, "unknown profiler mode");
     }
 
     return Qtrue;
@@ -264,8 +271,8 @@ st_numtable_increment(st_table *table, st_data_t key)
     st_insert(table, key, weight);
 }
 
-static void
-stackprof_sample()
+void
+stackprof_record_sample()
 {
     int num, i;
     VALUE prev_frame = Qnil;
@@ -305,7 +312,7 @@ stackprof_job_handler(void *data)
     if (!_stackprof.running) return;
 
     in_signal_handler++;
-    stackprof_sample();
+    stackprof_record_sample();
     in_signal_handler--;
 }
 
@@ -324,6 +331,17 @@ stackprof_newobj_handler(VALUE tpval, void *data)
 {
     _stackprof.overall_signals++;
     stackprof_job_handler(0);
+}
+
+static VALUE
+stackprof_sample(VALUE self)
+{
+    if (!_stackprof.running)
+	return Qfalse;
+
+    _stackprof.overall_signals++;
+    stackprof_job_handler(0);
+    return Qtrue;
 }
 
 static int
@@ -377,6 +395,7 @@ void
 Init_stackprof(void)
 {
     sym_object = ID2SYM(rb_intern("object"));
+    sym_custom = ID2SYM(rb_intern("custom"));
     sym_wall = ID2SYM(rb_intern("wall"));
     sym_cpu = ID2SYM(rb_intern("cpu"));
     sym_name = ID2SYM(rb_intern("name"));
@@ -402,6 +421,7 @@ Init_stackprof(void)
     rb_define_singleton_method(rb_mStackProf, "start", stackprof_start, -1);
     rb_define_singleton_method(rb_mStackProf, "stop", stackprof_stop, 0);
     rb_define_singleton_method(rb_mStackProf, "results", stackprof_results, 0);
+    rb_define_singleton_method(rb_mStackProf, "sample", stackprof_sample, 0);
 
     rb_autoload(rb_mStackProf, rb_intern_const("Report"), "stackprof/report.rb");
     rb_autoload(rb_mStackProf, rb_intern_const("Middleware"), "stackprof/middleware.rb");

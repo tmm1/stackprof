@@ -67,6 +67,22 @@ class StackProfTest < Test::Unit::TestCase
     assert_in_delta 200, frame[:samples], 5
   end
 
+  def test_custom
+    profile = StackProf.run(mode: :custom) do
+      10.times do
+        StackProf.sample
+      end
+    end
+
+    assert_equal :custom, profile[:mode]
+    assert_equal 10, profile[:samples]
+
+    frame = profile[:frames].values.first
+    assert_equal "block (2 levels) in StackProfTest#test_custom", frame[:name]
+    assert_equal __LINE__-10, frame[:line]
+    assert_equal 10, frame[:lines][__LINE__-10]
+  end
+
   def test_fork
     StackProf.run do
       pid = fork do
