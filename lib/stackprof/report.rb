@@ -1,4 +1,5 @@
 require 'pp'
+require 'digest/md5'
 
 module StackProf
   class Report
@@ -9,9 +10,30 @@ module StackProf
       @data[:frames].each{ |k,v| frames[k.to_s] = v }
       @data[:frames] = frames
     end
+    attr_reader :data
 
     def frames(sort_by_total=false)
       Hash[ *@data[:frames].sort_by{ |iseq, stats| -stats[sort_by_total ? :total_samples : :samples] }.flatten(1) ]
+    end
+
+    def normalized_frames
+      id2hash = {}
+      @data[:frames].each do |frame, info|
+        id2hash[frame.to_s] = info[:hash] = Digest::MD5.hexdigest("#{info[:name]}#{info[:file]}#{info[:line]}")
+      end
+      @data[:frames].inject(Hash.new) do |hash, (frame, info)|
+        info = hash[id2hash[frame.to_s]] = info.dup
+        info[:edges] = info[:edges].inject(Hash.new){ |edges, (edge, weight)| edges[id2hash[edge.to_s]] = weight; edges } if info[:edges]
+        hash
+      end
+    end
+
+    def version
+      @data[:version]
+    end
+
+    def modeline
+      "#{@data[:mode]}(#{@data[:interval]})"
     end
 
     def overall_samples
@@ -36,10 +58,6 @@ module StackProf
 
     def print_debug
       pp @data
-    end
-
-    def print_files(f = STDOUT)
-      pp files.sort_by{ |file, vals| -vals.values.inject(&:+) }
     end
 
     def print_graphviz(filter = nil, f = STDOUT)
@@ -82,9 +100,16 @@ module StackProf
       f.puts "}"
     end
 
-    def print_text(sort_by_total=false, f = STDOUT)
+    def print_text(sort_by_total=false, limit=nil, f = STDOUT)
+      f.puts "=================================="
+      f.printf "  Mode: #{modeline}\n"
+      f.printf "  Samples: #{@data[:samples]} (%.2f%% miss rate)\n", 100.0*@data[:missed_samples]/(@data[:missed_samples]+@data[:samples])
+      f.printf "  GC: #{@data[:gc_samples]} (%.2f%%)\n", 100.0*@data[:gc_samples]/@data[:samples]
+      f.puts "=================================="
       f.printf "% 10s    (pct)  % 10s    (pct)     FRAME\n" % ["TOTAL", "SAMPLES"]
-      frames(sort_by_total).each do |frame, info|
+      list = frames(sort_by_total)
+      list = list.first(limit) if limit
+      list.each do |frame, info|
         call, total = info.values_at(:samples, :total_samples)
         f.printf "% 10d % 8s  % 10d % 8s     %s\n", total, "(%2.1f%%)" % (total*100.0/overall_samples), call, "(%2.1f%%)" % (call*100.0/overall_samples), info[:name]
       end
@@ -96,7 +121,7 @@ module StackProf
       f.puts "pid: 0"
       f.puts "cmd: ruby"
       f.puts "part: 1"
-      f.puts "desc: mode: #{@data[:mode]}(#{@data[:interval]})"
+      f.puts "desc: mode: #{modeline}"
       f.puts "desc: missed: #{@data[:missed_samples]})"
       f.puts "positions: line"
       f.puts "events: Instructions"
@@ -132,15 +157,77 @@ module StackProf
         f.printf "%s (%s:%d)\n", info[:name], file, line
 
         lines = info[:lines]
-        source = File.readlines(file).each_with_index do |code, i|
-          next unless (line-1..maxline).include?(i)
-          if lines and samples = lines[i+1]
-            f.printf "% 5d % 7s / % 7s  | % 5d  | %s", samples, "(%2.1f%%" % (100.0*samples/overall_samples), "%2.1f%%)" % (100.0*samples/info[:samples]), i+1, code
-          else
-            f.printf "                         | % 5d  | %s", i+1, code
-          end
+        source_display(f, file, lines, line-1..maxline)
+      end
+    end
+
+    def print_file(filter, f = STDOUT)
+      filter = /#{Regexp.escape filter}/ unless Regexp === filter
+      list = files
+      list.select!{ |name, lines| name =~ filter }
+      list.sort_by{ |file, vals| -vals.values.inject(&:+) }.each do |file, lines|
+        source_display(f, file, lines)
+      end
+    end
+
+    private
+
+    def source_display(f, file, lines, range=nil)
+      File.readlines(file).each_with_index do |code, i|
+        next unless range.nil? || range.include?(i)
+        if lines and samples = lines[i+1] and samples > 0
+          f.printf "% 5d % 7s  | % 5d  | %s", samples, "(%2.1f%%)" % (100.0*samples/overall_samples), i+1, code
+        else
+          f.printf "               | % 5d  | %s", i+1, code
         end
       end
+    end
+
+    def +(other)
+      raise ArgumentError, "cannot combine #{other.class}" unless self.class == other.class
+      raise ArgumentError, "cannot combine #{modeline} with #{other.modeline}" unless modeline == other.modeline
+      raise ArgumentError, "cannot combine v#{version} with v#{other.version}" unless version == other.version
+
+      f1, f2 = normalized_frames, other.normalized_frames
+      frames = (f1.keys + f2.keys).uniq.inject(Hash.new) do |hash, id|
+        if f1[id].nil?
+          hash[id] = f2[id]
+        elsif f2[id]
+          hash[id] = f1[id]
+          hash[id][:total_samples] += f2[id][:total_samples]
+          hash[id][:samples] += f2[id][:samples]
+          if f2[id][:edges]
+            edges = hash[id][:edges] ||= {}
+            f2[id][:edges].each do |edge, weight|
+              edges[edge] ||= 0
+              edges[edge] += weight
+            end
+          end
+          if f2[id][:lines]
+            lines = hash[id][:lines] ||= {}
+            f2[id][:lines].each do |line, weight|
+              lines[line] ||= 0
+              lines[line] += weight
+            end
+          end
+        else
+          hash[id] = f1[id]
+        end
+        hash
+      end
+
+      d1, d2 = data, other.data
+      data = {
+        version: version,
+        mode: d1[:mode],
+        interval: d1[:interval],
+        samples: d1[:samples] + d2[:samples],
+        gc_samples: d1[:gc_samples] + d2[:gc_samples],
+        missed_samples: d1[:missed_samples] + d2[:missed_samples],
+        frames: frames
+      }
+
+      self.class.new(data)
     end
   end
 end
