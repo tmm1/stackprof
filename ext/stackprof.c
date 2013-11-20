@@ -152,8 +152,11 @@ frame_lines_i(st_data_t key, st_data_t val, st_data_t arg)
 {
     VALUE lines = (VALUE)arg;
 
-    intptr_t weight = (intptr_t)val;
-    rb_hash_aset(lines, INT2FIX(key), INT2FIX(weight));
+    size_t weight = (size_t)val;
+    size_t total = weight & (~(size_t)0 << (8*SIZEOF_SIZE_T/2));
+    weight -= total;
+    total = total >> (8*SIZEOF_SIZE_T/2);
+    rb_hash_aset(lines, INT2FIX(key), rb_ary_new3(2, ULONG2NUM(total), ULONG2NUM(weight)));
     return ST_CONTINUE;
 }
 
@@ -212,7 +215,7 @@ stackprof_results(VALUE self)
 	return Qnil;
 
     results = rb_hash_new();
-    rb_hash_aset(results, sym_version, DBL2NUM(1.0));
+    rb_hash_aset(results, sym_version, DBL2NUM(1.1));
     rb_hash_aset(results, sym_mode, _stackprof.mode);
     rb_hash_aset(results, sym_interval, _stackprof.interval);
     rb_hash_aset(results, sym_samples, SIZET2NUM(_stackprof.overall_samples));
@@ -265,19 +268,19 @@ sample_for(VALUE frame)
 static int
 numtable_increment_callback(st_data_t *key, st_data_t *value, st_data_t arg, int existing)
 {
-    uintptr_t *weight = (uintptr_t *)value;
-    uintptr_t increment = (uintptr_t)arg;
+    size_t *weight = (size_t *)value;
+    size_t increment = (size_t)arg;
 
     if (existing)
-	(*weight)++;
+	(*weight) += increment;
     else
-	*weight = 1;
+	*weight = increment;
 
     return ST_CONTINUE;
 }
 
 void
-st_numtable_increment(st_table *table, st_data_t key, uintptr_t increment)
+st_numtable_increment(st_table *table, st_data_t key, size_t increment)
 {
     st_update(table, key, numtable_increment_callback, (st_data_t)increment);
 }
@@ -300,15 +303,18 @@ stackprof_record_sample()
 
 	if (i == 0) {
 	    frame_data->caller_samples++;
-	    if (line > 0) {
-		if (!frame_data->lines)
-		    frame_data->lines = st_init_numtable();
-		st_numtable_increment(frame_data->lines, (st_data_t)line, 1);
-	    }
 	} else {
 	    if (!frame_data->edges)
 		frame_data->edges = st_init_numtable();
 	    st_numtable_increment(frame_data->edges, (st_data_t)prev_frame, 1);
+	}
+
+	if (line > 0) {
+	    if (!frame_data->lines)
+		frame_data->lines = st_init_numtable();
+	    size_t half = (size_t)1<<(8*SIZEOF_SIZE_T/2);
+	    size_t increment = i == 0 ? half + 1 : half;
+	    st_numtable_increment(frame_data->lines, (st_data_t)line, increment);
 	}
 
 	prev_frame = frame;

@@ -5,7 +5,7 @@ require 'test/unit'
 class StackProfTest < Test::Unit::TestCase
   def test_info
     profile = StackProf.run{}
-    assert_equal 1.0, profile[:version]
+    assert_equal 1.1, profile[:version]
     assert_equal :wall, profile[:mode]
     assert_equal 1000, profile[:interval]
     assert_equal 0, profile[:samples]
@@ -43,8 +43,11 @@ class StackProfTest < Test::Unit::TestCase
     assert_equal 2, frame[:samples]
     line = __LINE__
     assert_equal line-11, frame[:line]
-    assert_equal 1, frame[:lines][line-10]
-    assert_equal 1, frame[:lines][line-9]
+    assert_equal [1, 1], frame[:lines][line-10]
+    assert_equal [1, 1], frame[:lines][line-9]
+
+    frame = profile[:frames].values[1]
+    assert_equal [2, 0], frame[:lines][line-11]
   end
 
   def test_cputime
@@ -80,7 +83,7 @@ class StackProfTest < Test::Unit::TestCase
     frame = profile[:frames].values.first
     assert_equal "block (2 levels) in StackProfTest#test_custom", frame[:name]
     assert_equal __LINE__-10, frame[:line]
-    assert_equal 10, frame[:lines][__LINE__-10]
+    assert_equal [10, 10], frame[:lines][__LINE__-10]
   end
 
   def test_fork
