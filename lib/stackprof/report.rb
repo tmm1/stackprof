@@ -139,7 +139,7 @@ module StackProf
         f.puts "fl=#{frame[:file]}"
         f.puts "fn=#{frame[:name]}"
         frame[:lines].each do |line, weight|
-          f.puts "#{line} #{weight}"
+          f.puts "#{line} #{weight.is_a?(Array) ? weight[1] : weight}"
         end if frame[:lines]
         frame[:edges].each do |edge, weight|
           oframe = list[edge.to_s]
@@ -160,10 +160,28 @@ module StackProf
         file, line = info.values_at(:file, :line)
         line ||= 1
 
-        maxline = info[:lines] ? info[:lines].keys.max : line + 5
-        f.printf "%s (%s:%d)\n", info[:name], file, line
-
         lines = info[:lines]
+        maxline = lines ? lines.keys.max : line + 5
+        f.printf "%s (%s:%d)\n", info[:name], file, line
+        f.printf "  samples: % 5d self (%2.1f%%)  /  % 5d total (%2.1f%%)\n", info[:samples], 100.0*info[:samples]/overall_samples, info[:total_samples], 100.0*info[:total_samples]/overall_samples
+
+        if (callers = data[:frames].map{ |id, other| [other[:name], other[:edges][frame.to_i]] if other[:edges] && other[:edges].include?(frame.to_i) }.compact).any?
+          f.puts "  callers:"
+          callers = callers.sort_by(&:last).reverse
+          callers.each do |name, weight|
+            f.printf "   % 5d  (% 8s)  %s\n", weight, "%3.1f%%" % (100.0*weight/info[:total_samples]), name
+          end
+        end
+
+        if callees = info[:edges]
+          f.printf "  callees (%d total):\n", info[:total_samples]-info[:samples]
+          callees = callees.map{ |k, weight| [data[:frames][k.to_s][:name], weight] }
+          callees.each do |name, weight|
+            f.printf "   % 5d  (% 8s)  %s\n", weight, "%3.1f%%" % (100.0*weight/(info[:total_samples]-info[:samples])), name
+          end
+        end
+
+        f.puts "  code:"
         source_display(f, file, lines, line-1..maxline)
       end
     end
@@ -182,7 +200,7 @@ module StackProf
       filter = /#{Regexp.escape filter}/ unless Regexp === filter
       list = files
       list.select!{ |name, lines| name =~ filter }
-      list.sort_by{ |file, vals| -vals.values.inject(&:+) }.each do |file, lines|
+      list.sort_by{ |file, vals| -vals.values.inject(0){ |sum, n| sum + (n.is_a?(Array) ? n[1] : n) } }.each do |file, lines|
         source_display(f, file, lines)
       end
     end
@@ -192,10 +210,22 @@ module StackProf
     def source_display(f, file, lines, range=nil)
       File.readlines(file).each_with_index do |code, i|
         next unless range.nil? || range.include?(i)
-        if lines and samples = lines[i+1] and samples > 0
-          f.printf "% 5d % 7s  | % 5d  | %s", samples, "(%2.1f%%)" % (100.0*samples/overall_samples), i+1, code
+        if lines and lineinfo = lines[i+1]
+          total_samples, samples = lineinfo
+          if version == 1.0
+            samples = total_samples
+            f.printf "% 5d % 7s  | % 5d  | %s", samples, "(%2.1f%%)" % (100.0*samples/overall_samples), i+1, code
+          elsif samples > 0
+            f.printf "% 5d  % 8s / % 5d  % 7s  | % 5d  | %s", total_samples, "(%2.1f%%)" % (100.0*total_samples/overall_samples), samples, "(%2.1f%%)" % (100.0*samples/overall_samples), i+1, code
+          else
+            f.printf "% 5d  % 8s                   | % 5d  | %s", total_samples, "(%3.1f%%)" % (100.0*total_samples/overall_samples), i+1, code
+          end
         else
-          f.printf "               | % 5d  | %s", i+1, code
+          if version == 1.0
+            f.printf "               | % 5d  | %s", i+1, code
+          else
+            f.printf "                                  | % 5d  | %s", i+1, code
+          end
         end
       end
     end
@@ -223,8 +253,7 @@ module StackProf
           if f2[id][:lines]
             lines = hash[id][:lines] ||= {}
             f2[id][:lines].each do |line, weight|
-              lines[line] ||= 0
-              lines[line] += weight
+              lines[line] = add_lines(lines[line], weight)
             end
           end
         else
