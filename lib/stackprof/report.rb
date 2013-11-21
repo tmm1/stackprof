@@ -47,13 +47,20 @@ module StackProf
     def files
       @data[:files] ||= @data[:frames].inject(Hash.new) do |hash, (addr, frame)|
         if file = frame[:file] and lines = frame[:lines]
-          hash[file] ||= Hash.new(0)
-          lines.each do |line, num|
-            hash[file][line] += num
+          hash[file] ||= Hash.new
+          lines.each do |line, weight|
+            hash[file][line] = add_lines(hash[file][line], weight)
           end
         end
         hash
       end
+    end
+
+    def add_lines(a, b)
+      return b if a.nil?
+      return a+b if a.is_a? Fixnum
+      return [ a[0], a[1]+b ] if b.is_a? Fixnum
+      [ a[0]+b[0], a[1]+b[1] ]
     end
 
     def print_debug
@@ -158,6 +165,16 @@ module StackProf
 
         lines = info[:lines]
         source_display(f, file, lines, line-1..maxline)
+      end
+    end
+
+    def print_files(sort_by_total=false, limit=nil, f = STDOUT)
+      list = files.map{ |file, vals| [file, vals.values.inject([0,0]){ |sum, n| add_lines(sum, n) }] }
+      list = list.sort_by{ |file, samples| -samples[1] }
+      list = list.first(limit) if limit
+      list.each do |file, vals|
+        total_samples, samples = *vals
+        f.printf "% 5d  (%2.1f%%) / % 5d  (%2.1f%%) %s\n", total_samples, (100.0*total_samples/overall_samples), samples, (100.0*samples/overall_samples), file
       end
     end
 

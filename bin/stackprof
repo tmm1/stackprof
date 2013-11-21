@@ -15,6 +15,7 @@ OptionParser.new(ARGV) do |o|
   o.on('--callgrind'){ options[:format] = :callgrind }
   o.on('--graphviz'){ options[:format] = :graphviz }
   o.on('--file [grep]'){ |f| options[:format] = :file; options[:filter] = f }
+  o.on('--files'){ |f| options[:format] = :files }
   o.on('--method [grep]'){ |f| options[:format] = :method; options[:filter] = f }
   o.on('--debug'){ options[:format] = :debug }
   o.on('--sort-total'){ options[:sort] = true }
@@ -38,6 +39,8 @@ when :method
   report.print_method(options[:filter])
 when :file
   report.print_file(options[:filter])
+when :files
+  report.print_files(options[:sort], options[:limit])
 else
-  report.send("print_#{options[:format]}")
+  raise ArgumentError, "unknown format: #{options[:format]}"
 end
