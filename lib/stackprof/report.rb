@@ -146,7 +146,7 @@ module StackProf
       f.puts "totals: #{@data[:samples]}"
     end
 
-    def print_source(name, f = STDOUT)
+    def print_method(name, f = STDOUT)
       name = /#{Regexp.escape name}/ unless Regexp === name
       frames.each do |frame, info|
         next unless info[:name] =~ name

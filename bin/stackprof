@@ -35,7 +35,7 @@ when :callgrind
 when :graphviz
   report.print_graphviz
 when :method
-  report.print_source(options[:filter])
+  report.print_method(options[:filter])
 when :file
   report.print_file(options[:filter])
 else
