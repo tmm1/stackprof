@@ -5,10 +5,6 @@ module StackProf
   class Report
     def initialize(data)
       @data = data
-
-      frames = {}
-      @data[:frames].each{ |k,v| frames[k.to_s] = v }
-      @data[:frames] = frames
     end
     attr_reader :data
 
@@ -165,7 +161,7 @@ module StackProf
         f.printf "%s (%s:%d)\n", info[:name], file, line
         f.printf "  samples: % 5d self (%2.1f%%)  /  % 5d total (%2.1f%%)\n", info[:samples], 100.0*info[:samples]/overall_samples, info[:total_samples], 100.0*info[:total_samples]/overall_samples
 
-        if (callers = data[:frames].map{ |id, other| [other[:name], other[:edges][frame.to_i]] if other[:edges] && other[:edges].include?(frame.to_i) }.compact).any?
+        if (callers = data[:frames].map{ |id, other| [other[:name], other[:edges][frame]] if other[:edges] && other[:edges].include?(frame) }.compact).any?
           f.puts "  callers:"
           callers = callers.sort_by(&:last).reverse
           callers.each do |name, weight|
@@ -175,7 +171,7 @@ module StackProf
 
         if callees = info[:edges]
           f.printf "  callees (%d total):\n", info[:total_samples]-info[:samples]
-          callees = callees.map{ |k, weight| [data[:frames][k.to_s][:name], weight] }
+          callees = callees.map{ |k, weight| [data[:frames][k][:name], weight] }
           callees.each do |name, weight|
             f.printf "   % 5d  (% 8s)  %s\n", weight, "%3.1f%%" % (100.0*weight/(info[:total_samples]-info[:samples])), name
           end
