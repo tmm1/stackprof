@@ -197,3 +197,8 @@ StackProf.start
 StackProf.stop
 StackProf.results
 ```
+
+### todo
+
+* file/iseq blacklist
+* restore signal handlers on stop
