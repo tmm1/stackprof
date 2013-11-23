@@ -31,6 +31,8 @@ report = reports.inject(:+)
 case options[:format]
 when :text
   report.print_text(options[:sort], options[:limit])
+when :debug
+  report.print_debug
 when :callgrind
   report.print_callgrind
 when :graphviz
