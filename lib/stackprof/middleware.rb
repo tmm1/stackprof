@@ -2,20 +2,31 @@ require 'fileutils'
 
 module StackProf
   class Middleware
-    def initialize(app)
+    def initialize(app, options = {})
       @app = app
-      at_exit{ Middleware.save if Middleware.enabled? }
+      @options = options
+      @num_reqs = options[:save_every] || nil
+      Middleware.mode = options[:mode] || :cpu
+      Middleware.interval = options[:interval] || 1000
+      Middleware.enabled = options[:enabled]
+      at_exit{ Middleware.save? } if options[:save_at_exit]
     end
 
     def call(env)
-      StackProf.start(mode: :cpu, interval: 1000) if self.class.enabled?
+      StackProf.start(mode: Middleware.mode, interval: Middleware.interval) if Middleware.enabled?
       @app.call(env)
     ensure
-      StackProf.stop if self.class.enabled?
+      if Middleware.enabled?
+        StackProf.stop
+        if @num_reqs && (@num_reqs-=1) == 0
+          @num_reqs = @options[:save_every]
+          Middleware.save
+        end
+      end
     end
 
     class << self
-      attr_accessor :enabled
+      attr_accessor :enabled, :mode, :interval
       alias enabled? enabled
 
       def save
