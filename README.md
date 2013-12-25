@@ -13,7 +13,7 @@ in ruby:
 profile = StackProf.run(mode: :cpu) do
   ...
 end
-File.open('tmp/stackprof-cpu-myapp.dump'){ |f| f.write Marshal.dump(profile) }
+File.open('tmp/stackprof-cpu-myapp.dump', 'wb'){ |f| f.write Marshal.dump(profile) }
 ```
 
 via rack:
