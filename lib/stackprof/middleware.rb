@@ -3,12 +3,14 @@ require 'fileutils'
 module StackProf
   class Middleware
     def initialize(app, options = {})
-      @app = app
-      @options = options
-      @num_reqs = options[:save_every] || nil
-      Middleware.mode = options[:mode] || :cpu
+      @app       = app
+      @options   = options
+      @num_reqs  = options[:save_every] || nil
+
+      Middleware.mode     = options[:mode] || :cpu
       Middleware.interval = options[:interval] || 1000
-      Middleware.enabled = options[:enabled]
+      Middleware.enabled  = options[:enabled]
+      Middleware.path     = options[:path] || 'tmp'
       at_exit{ Middleware.save? } if options[:save_at_exit]
     end
 
@@ -26,17 +28,19 @@ module StackProf
     end
 
     class << self
-      attr_accessor :enabled, :mode, :interval
+      attr_accessor :enabled, :mode, :interval, :path
       alias enabled? enabled
 
       def save
         if results = StackProf.results
-          FileUtils.mkdir_p('tmp')
-          File.open("tmp/stackprof-#{results[:mode]}-#{Process.pid}-#{Time.now.to_i}.dump", 'wb') do |f|
+          FileUtils.mkdir_p(Middleware.path)
+          filename = "stackprof-#{results[:mode]}-#{Process.pid}-#{Time.now.to_i}.dump"
+          File.open(File.join(Middleware.path, filename), 'wb') do |f| 
             f.write Marshal.dump(results)
           end
         end
       end
+
     end
   end
 end
