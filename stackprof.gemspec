@@ -18,4 +18,5 @@ Gem::Specification.new do |s|
   s.license = 'MIT'
 
   s.add_development_dependency 'rake-compiler'
+  s.add_development_dependency 'mocha'
 end
