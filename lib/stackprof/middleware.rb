@@ -32,7 +32,7 @@ module StackProf
       def save
         if results = StackProf.results
           FileUtils.mkdir_p('tmp')
-          File.open("tmp/stackprof-#{results[:mode]}-#{Process.pid}-#{Time.now.to_i}.dump", 'w') do |f|
+          File.open("tmp/stackprof-#{results[:mode]}-#{Process.pid}-#{Time.now.to_i}.dump", 'wb') do |f|
             f.write Marshal.dump(results)
           end
         end
