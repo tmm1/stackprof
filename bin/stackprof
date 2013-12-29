@@ -8,19 +8,22 @@ options = {
   :limit => 30
 }
 
-OptionParser.new(ARGV) do |o|
-  o.banner = 'stackprof-report [file.dump]+'
+parser = OptionParser.new(ARGV) do |o|
+  o.banner = "Usage: stackprof [file.dump]+ [--text|--method=NAME|--callgrind|--graphviz]"
 
-  o.on('--text', 'Text output (default)'){ options[:format] = :text }
-  o.on('--callgrind'){ options[:format] = :callgrind }
-  o.on('--graphviz'){ options[:format] = :graphviz }
-  o.on('--file [grep]'){ |f| options[:format] = :file; options[:filter] = f }
-  o.on('--files'){ |f| options[:format] = :files }
-  o.on('--method [grep]'){ |f| options[:format] = :method; options[:filter] = f }
+  o.on('--text', 'Text summary (default)'){ options[:format] = :text }
+  o.on('--method [grep]', 'Zoom into specified method'){ |f| options[:format] = :method; options[:filter] = f }
+  o.on('--files', 'List of files'){ |f| options[:format] = :files }
+  o.on('--file [grep]', 'Show annotated code for specified file'){ |f| options[:format] = :file; options[:filter] = f }
+  o.on('--callgrind', 'Callgrind output (use with kcachegrind, gprof2dot)'){ options[:format] = :callgrind }
+  o.on('--graphviz', 'Graphviz output (use with dot)'){ options[:format] = :graphviz }
   o.on('--debug'){ options[:format] = :debug }
-  o.on('--sort-total'){ options[:sort] = true }
-  o.on('--limit [num]', Integer){ |n| options[:limit] = n }
-end.parse!
+  o.on('--limit [num]', Integer, 'Limit --text output to N lines'){ |n| options[:limit] = n }
+  o.on('--sort-total', 'Sort --text output on total samples'){ options[:sort] = true }
+end
+
+parser.parse!
+parser.abort(parser.help) if ARGV.empty?
 
 reports = []
 while ARGV.size > 0
