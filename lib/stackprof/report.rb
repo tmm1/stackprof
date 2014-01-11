@@ -92,11 +92,11 @@ module StackProf
         fontsize = (1.0 * call / max_samples) * 28 + 10
         size = (1.0 * total / overall_samples) * 2.0 + 0.5
 
-        f.puts "  #{frame} [size=#{size}] [fontsize=#{fontsize}] [penwidth=\"#{size}\"] [shape=box] [label=\"#{info[:name]}\\n#{sample}\"];"
+        f.puts "  \"#{frame}\" [size=#{size}] [fontsize=#{fontsize}] [penwidth=\"#{size}\"] [shape=box] [label=\"#{info[:name]}\\n#{sample}\"];"
         if edges = info[:edges]
           edges.each do |edge, weight|
             size = (1.0 * weight / overall_samples) * 2.0 + 0.5
-            f.puts "  #{frame} -> #{edge} [label=\"#{weight}\"] [weight=\"#{weight}\"] [penwidth=\"#{size}\"];"
+            f.puts "  \"#{frame}\" -> \"#{edge}\" [label=\"#{weight}\"] [weight=\"#{weight}\"] [penwidth=\"#{size}\"];"
           end
         end
       end
