@@ -188,7 +188,7 @@ module StackProf
       list = list.first(limit) if limit
       list.each do |file, vals|
         total_samples, samples = *vals
-        f.printf "% 5d  (%2.1f%%) / % 5d  (%2.1f%%) %s\n", total_samples, (100.0*total_samples/overall_samples), samples, (100.0*samples/overall_samples), file
+        f.printf "% 5d  (%5.1f%%) / % 5d  (%5.1f%%)   %s\n", total_samples, (100.0*total_samples/overall_samples), samples, (100.0*samples/overall_samples), file
       end
     end
 
