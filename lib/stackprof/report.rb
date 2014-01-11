@@ -171,7 +171,7 @@ module StackProf
 
         if callees = info[:edges]
           f.printf "  callees (%d total):\n", info[:total_samples]-info[:samples]
-          callees = callees.map{ |k, weight| [data[:frames][k][:name], weight] }
+          callees = callees.map{ |k, weight| [data[:frames][k][:name], weight] }.sort_by{ |k,v| -v }
           callees.each do |name, weight|
             f.printf "   % 5d  (% 8s)  %s\n", weight, "%3.1f%%" % (100.0*weight/(info[:total_samples]-info[:samples])), name
           end
