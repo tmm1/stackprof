@@ -67,8 +67,8 @@ $ stackprof tmp/stackprof-cpu-*.dump --method 'Object#present?'
 
 four sampling modes are supported:
 
-  - :wall (using `ITIMER_REAL` and `SIGALRM`) [default mode]
-  - :cpu (using `ITIMER_PROF` and `SIGPROF`)
+  - :wall (using `ITIMER_REAL` and `SIGALRM`)
+  - :cpu (using `ITIMER_PROF` and `SIGPROF`) [default mode]
   - :object (using `RUBY_INTERNAL_EVENT_NEWOBJ`)
   - :custom (user-defined via `StackProf.sample`)
 
