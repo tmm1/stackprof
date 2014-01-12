@@ -60,45 +60,45 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     VALUE opts = Qnil, mode = Qnil, interval = Qnil;
 
     if (_stackprof.running)
-	return Qfalse;
+        return Qfalse;
 
     rb_scan_args(argc, argv, "0:", &opts);
 
     if (RTEST(opts)) {
-	mode = rb_hash_aref(opts, sym_mode);
-	interval = rb_hash_aref(opts, sym_interval);
+        mode = rb_hash_aref(opts, sym_mode);
+        interval = rb_hash_aref(opts, sym_interval);
     }
     if (!RTEST(mode)) mode = sym_wall;
 
     if (!_stackprof.frames) {
-	_stackprof.frames = st_init_numtable();
-	_stackprof.overall_signals = 0;
-	_stackprof.overall_samples = 0;
-	_stackprof.during_gc = 0;
+        _stackprof.frames = st_init_numtable();
+        _stackprof.overall_signals = 0;
+        _stackprof.overall_samples = 0;
+        _stackprof.during_gc = 0;
     }
 
     if (mode == sym_object) {
-	if (!RTEST(interval)) interval = INT2FIX(1);
+        if (!RTEST(interval)) interval = INT2FIX(1);
 
-	objtracer = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, stackprof_newobj_handler, 0);
-	rb_tracepoint_enable(objtracer);
+        objtracer = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, stackprof_newobj_handler, 0);
+        rb_tracepoint_enable(objtracer);
     } else if (mode == sym_wall || mode == sym_cpu) {
-	if (!RTEST(interval)) interval = INT2FIX(1000);
+        if (!RTEST(interval)) interval = INT2FIX(1000);
 
-	sa.sa_sigaction = stackprof_signal_handler;
-	sa.sa_flags = SA_RESTART | SA_SIGINFO;
-	sigemptyset(&sa.sa_mask);
-	sigaction(mode == sym_wall ? SIGALRM : SIGPROF, &sa, NULL);
+        sa.sa_sigaction = stackprof_signal_handler;
+        sa.sa_flags = SA_RESTART | SA_SIGINFO;
+        sigemptyset(&sa.sa_mask);
+        sigaction(mode == sym_wall ? SIGALRM : SIGPROF, &sa, NULL);
 
-	timer.it_interval.tv_sec = 0;
-	timer.it_interval.tv_usec = NUM2LONG(interval);
-	timer.it_value = timer.it_interval;
-	setitimer(mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
+        timer.it_interval.tv_sec = 0;
+        timer.it_interval.tv_usec = NUM2LONG(interval);
+        timer.it_value = timer.it_interval;
+        setitimer(mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
     } else if (mode == sym_custom) {
-	/* sampled manually */
-	interval = Qnil;
+        /* sampled manually */
+        interval = Qnil;
     } else {
-	rb_raise(rb_eArgError, "unknown profiler mode");
+        rb_raise(rb_eArgError, "unknown profiler mode");
     }
 
     _stackprof.running = 1;
@@ -115,23 +115,23 @@ stackprof_stop(VALUE self)
     struct itimerval timer;
 
     if (!_stackprof.running)
-	return Qfalse;
+        return Qfalse;
     _stackprof.running = 0;
 
     if (_stackprof.mode == sym_object) {
-	rb_tracepoint_disable(objtracer);
+        rb_tracepoint_disable(objtracer);
     } else if (_stackprof.mode == sym_wall || _stackprof.mode == sym_cpu) {
-	memset(&timer, 0, sizeof(timer));
-	setitimer(_stackprof.mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
+        memset(&timer, 0, sizeof(timer));
+        setitimer(_stackprof.mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
 
-	sa.sa_handler = SIG_IGN;
-	sa.sa_flags = SA_RESTART;
-	sigemptyset(&sa.sa_mask);
-	sigaction(_stackprof.mode == sym_wall ? SIGALRM : SIGPROF, &sa, NULL);
+        sa.sa_handler = SIG_IGN;
+        sa.sa_flags = SA_RESTART;
+        sigemptyset(&sa.sa_mask);
+        sigaction(_stackprof.mode == sym_wall ? SIGALRM : SIGPROF, &sa, NULL);
     } else if (_stackprof.mode == sym_custom) {
-	/* sampled manually */
+        /* sampled manually */
     } else {
-	rb_raise(rb_eArgError, "unknown profiler mode");
+        rb_raise(rb_eArgError, "unknown profiler mode");
     }
 
     return Qtrue;
@@ -177,11 +177,11 @@ frame_i(st_data_t key, st_data_t val, st_data_t arg)
 
     file = rb_profile_frame_absolute_path(frame);
     if (NIL_P(file))
-	file = rb_profile_frame_path(frame);
+        file = rb_profile_frame_path(frame);
     rb_hash_aset(details, sym_file, file);
 
     if ((line = rb_profile_frame_first_lineno(frame)) != INT2FIX(0))
-	rb_hash_aset(details, sym_line, line);
+        rb_hash_aset(details, sym_line, line);
 
     rb_hash_aset(details, sym_total_samples, SIZET2NUM(frame_data->total_samples));
     rb_hash_aset(details, sym_samples, SIZET2NUM(frame_data->caller_samples));
@@ -195,11 +195,11 @@ frame_i(st_data_t key, st_data_t val, st_data_t arg)
     }
 
     if (frame_data->lines) {
-	lines = rb_hash_new();
-	rb_hash_aset(details, sym_lines, lines);
-	st_foreach(frame_data->lines, frame_lines_i, (st_data_t)lines);
-	st_free_table(frame_data->lines);
-	frame_data->lines = NULL;
+        lines = rb_hash_new();
+        rb_hash_aset(details, sym_lines, lines);
+        st_foreach(frame_data->lines, frame_lines_i, (st_data_t)lines);
+        st_free_table(frame_data->lines);
+        frame_data->lines = NULL;
     }
 
     xfree(frame_data);
@@ -212,7 +212,7 @@ stackprof_results(VALUE self)
     VALUE results, frames;
 
     if (!_stackprof.frames || _stackprof.running)
-	return Qnil;
+        return Qnil;
 
     results = rb_hash_new();
     rb_hash_aset(results, sym_version, DBL2NUM(1.1));
@@ -272,9 +272,9 @@ numtable_increment_callback(st_data_t *key, st_data_t *value, st_data_t arg, int
     size_t increment = (size_t)arg;
 
     if (existing)
-	(*weight) += increment;
+        (*weight) += increment;
     else
-	*weight = increment;
+        *weight = increment;
 
     return ST_CONTINUE;
 }
@@ -295,29 +295,29 @@ stackprof_record_sample()
     num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer), _stackprof.frames_buffer, _stackprof.lines_buffer);
 
     for (i = 0; i < num; i++) {
-	int line = _stackprof.lines_buffer[i];
-	VALUE frame = _stackprof.frames_buffer[i];
-	frame_data_t *frame_data = sample_for(frame);
+        int line = _stackprof.lines_buffer[i];
+        VALUE frame = _stackprof.frames_buffer[i];
+        frame_data_t *frame_data = sample_for(frame);
 
-	frame_data->total_samples++;
+        frame_data->total_samples++;
 
-	if (i == 0) {
-	    frame_data->caller_samples++;
-	} else {
-	    if (!frame_data->edges)
-		frame_data->edges = st_init_numtable();
-	    st_numtable_increment(frame_data->edges, (st_data_t)prev_frame, 1);
-	}
+        if (i == 0) {
+            frame_data->caller_samples++;
+        } else {
+            if (!frame_data->edges)
+                frame_data->edges = st_init_numtable();
+            st_numtable_increment(frame_data->edges, (st_data_t)prev_frame, 1);
+        }
 
-	if (line > 0) {
-	    if (!frame_data->lines)
-		frame_data->lines = st_init_numtable();
-	    size_t half = (size_t)1<<(8*SIZEOF_SIZE_T/2);
-	    size_t increment = i == 0 ? half + 1 : half;
-	    st_numtable_increment(frame_data->lines, (st_data_t)line, increment);
-	}
+        if (line > 0) {
+            if (!frame_data->lines)
+                frame_data->lines = st_init_numtable();
+            size_t half = (size_t)1<<(8*SIZEOF_SIZE_T/2);
+            size_t increment = i == 0 ? half + 1 : half;
+            st_numtable_increment(frame_data->lines, (st_data_t)line, increment);
+        }
 
-	prev_frame = frame;
+        prev_frame = frame;
     }
 }
 
@@ -338,9 +338,9 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 {
     _stackprof.overall_signals++;
     if (rb_during_gc())
-	_stackprof.during_gc++, _stackprof.overall_samples++;
+        _stackprof.during_gc++, _stackprof.overall_samples++;
     else
-	rb_postponed_job_register_one(0, stackprof_job_handler, 0);
+        rb_postponed_job_register_one(0, stackprof_job_handler, 0);
 }
 
 static void
@@ -354,7 +354,7 @@ static VALUE
 stackprof_sample(VALUE self)
 {
     if (!_stackprof.running)
-	return Qfalse;
+        return Qfalse;
 
     _stackprof.overall_signals++;
     stackprof_job_handler(0);
@@ -373,7 +373,7 @@ static void
 stackprof_gc_mark(void *data)
 {
     if (_stackprof.frames)
-	st_foreach(_stackprof.frames, frame_mark_i, 0);
+        st_foreach(_stackprof.frames, frame_mark_i, 0);
 }
 
 static void
@@ -381,10 +381,10 @@ stackprof_atfork_prepare(void)
 {
     struct itimerval timer;
     if (_stackprof.running) {
-	if (_stackprof.mode == sym_wall || _stackprof.mode == sym_cpu) {
-	    memset(&timer, 0, sizeof(timer));
-	    setitimer(_stackprof.mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
-	}
+        if (_stackprof.mode == sym_wall || _stackprof.mode == sym_cpu) {
+            memset(&timer, 0, sizeof(timer));
+            setitimer(_stackprof.mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
+        }
     }
 }
 
@@ -393,12 +393,12 @@ stackprof_atfork_parent(void)
 {
     struct itimerval timer;
     if (_stackprof.running) {
-	if (_stackprof.mode == sym_wall || _stackprof.mode == sym_cpu) {
-	    timer.it_interval.tv_sec = 0;
-	    timer.it_interval.tv_usec = NUM2LONG(_stackprof.interval);
-	    timer.it_value = timer.it_interval;
-	    setitimer(_stackprof.mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
-	}
+        if (_stackprof.mode == sym_wall || _stackprof.mode == sym_cpu) {
+            timer.it_interval.tv_sec = 0;
+            timer.it_interval.tv_usec = NUM2LONG(_stackprof.interval);
+            timer.it_value = timer.it_interval;
+            setitimer(_stackprof.mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
+        }
     }
 }
 
