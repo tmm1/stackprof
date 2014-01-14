@@ -63,6 +63,10 @@ module StackProf
       pp @data
     end
 
+    def print_dump
+      puts Marshal.dump(@data.reject{|k,v| k == :files })
+    end
+
     def print_graphviz(filter = nil, f = STDOUT)
       if filter
         mark_stack = []

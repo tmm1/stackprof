@@ -19,6 +19,7 @@ parser = OptionParser.new(ARGV) do |o|
   o.on('--file [grep]', 'Show annotated code for specified file'){ |f| options[:format] = :file; options[:filter] = f }
   o.on('--callgrind', 'Callgrind output (use with kcachegrind, gprof2dot)'){ options[:format] = :callgrind }
   o.on('--graphviz', "Graphviz output (use with dot)\n\n"){ options[:format] = :graphviz }
+  o.on('--dump', 'Print marshaled profile dump (combine multiple profiles)'){ options[:format] = :dump }
   o.on('--debug', 'Pretty print raw profile data'){ options[:format] = :debug }
 end
 
@@ -41,6 +42,8 @@ when :text
   report.print_text(options[:sort], options[:limit])
 when :debug
   report.print_debug
+when :dump
+  report.print_dump
 when :callgrind
   report.print_callgrind
 when :graphviz
