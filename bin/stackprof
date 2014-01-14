@@ -27,7 +27,12 @@ parser.abort(parser.help) if ARGV.empty?
 
 reports = []
 while ARGV.size > 0
-  reports << StackProf::Report.new(Marshal.load(IO.binread(ARGV.pop)))
+  begin
+    file = ARGV.pop
+    reports << StackProf::Report.new(Marshal.load(IO.binread(file)))
+  rescue TypeError => e
+    STDERR.puts "** error parsing #{file}: #{e.inspect}"
+  end
 end
 report = reports.inject(:+)
 
