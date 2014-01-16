@@ -31,13 +31,14 @@ module StackProf
       attr_accessor :enabled, :mode, :interval, :path
       alias enabled? enabled
 
-      def save
+      def save(filename = nil)
         if results = StackProf.results
           FileUtils.mkdir_p(Middleware.path)
-          filename = "stackprof-#{results[:mode]}-#{Process.pid}-#{Time.now.to_i}.dump"
-          File.open(File.join(Middleware.path, filename), 'wb') do |f| 
+          filename ||= "stackprof-#{results[:mode]}-#{Process.pid}-#{Time.now.to_i}.dump"
+          File.open(File.join(Middleware.path, filename), 'wb') do |f|
             f.write Marshal.dump(results)
           end
+          filename
         end
       end
 
