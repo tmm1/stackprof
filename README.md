@@ -63,6 +63,8 @@ $ stackprof tmp/stackprof-cpu-*.dump --method 'Object#present?'
                                     |    22  |   end
 ```
 
+For an experimental version of WebUI reporting of stackprof, see [stackprof-webnav](https://github.com/alisnic/stackprof-webnav)
+
 ### sampling
 
 four sampling modes are supported:
