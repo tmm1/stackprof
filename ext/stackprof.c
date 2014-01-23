@@ -26,6 +26,8 @@ static struct {
     int running;
     VALUE mode;
     VALUE interval;
+    VALUE raw;
+    size_t raw_sample_index;
 
     size_t overall_signals;
     size_t overall_samples;
@@ -38,7 +40,7 @@ static struct {
 
 static VALUE sym_object, sym_wall, sym_cpu, sym_custom, sym_name, sym_file, sym_line;
 static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_lines;
-static VALUE sym_version, sym_mode, sym_interval, sym_frames;
+static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_frames;
 static VALUE sym_gc_samples, objtracer;
 static VALUE gc_hook;
 static VALUE rb_mStackProf;
@@ -51,7 +53,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 {
     struct sigaction sa;
     struct itimerval timer;
-    VALUE opts = Qnil, mode = Qnil, interval = Qnil;
+    VALUE opts = Qnil, mode = Qnil, interval = Qnil, raw = Qfalse;
 
     if (_stackprof.running)
 	return Qfalse;
@@ -61,6 +63,9 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     if (RTEST(opts)) {
 	mode = rb_hash_aref(opts, sym_mode);
 	interval = rb_hash_aref(opts, sym_interval);
+	if (RTEST(rb_hash_aref(opts, sym_raw))) {
+	    raw = rb_ary_new();
+	}
     }
     if (!RTEST(mode)) mode = sym_wall;
 
@@ -96,6 +101,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     }
 
     _stackprof.running = 1;
+    _stackprof.raw = raw;
     _stackprof.mode = mode;
     _stackprof.interval = interval;
 
@@ -223,6 +229,11 @@ stackprof_results(VALUE self)
     st_free_table(_stackprof.frames);
     _stackprof.frames = NULL;
 
+    if (RTEST(_stackprof.raw)) {
+	rb_hash_aset(results, sym_raw, _stackprof.raw);
+	_stackprof.raw = Qfalse;
+    }
+
     return results;
 }
 
@@ -282,11 +293,41 @@ st_numtable_increment(st_table *table, st_data_t key, size_t increment)
 void
 stackprof_record_sample()
 {
-    int num, i;
+    int num, i, n;
+    int raw_mode = RTEST(_stackprof.raw);
+    size_t newhash = 0;
     VALUE prev_frame = Qnil;
+    size_t raw_len;
 
     _stackprof.overall_samples++;
     num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer), _stackprof.frames_buffer, _stackprof.lines_buffer);
+
+    if (raw_mode) {
+	int found = 0;
+	raw_len = RARRAY_LEN(_stackprof.raw);
+
+	if (RARRAY_LEN(_stackprof.raw) > 0 && RARRAY_AREF(_stackprof.raw, _stackprof.raw_sample_index) == INT2FIX(num)) {
+	    for (i = num-1, n = 0; i >= 0; i--, n++) {
+		VALUE frame = _stackprof.frames_buffer[i];
+		if (RARRAY_AREF(_stackprof.raw, _stackprof.raw_sample_index + 1 + n) != rb_obj_id(frame))
+		    break;
+	    }
+	    if (i == -1) {
+		RARRAY_ASET(_stackprof.raw, raw_len-1, LONG2NUM(NUM2LONG(RARRAY_AREF(_stackprof.raw, raw_len-1))+1));
+		found = 1;
+	    }
+	}
+
+	if (!found) {
+	    _stackprof.raw_sample_index = raw_len;
+	    rb_ary_push(_stackprof.raw, INT2FIX(num));
+	    for (i = num-1; i >= 0; i--) {
+		VALUE frame = _stackprof.frames_buffer[i];
+		rb_ary_push(_stackprof.raw, rb_obj_id(frame));
+	    }
+	    rb_ary_push(_stackprof.raw, INT2FIX(1));
+	}
+    }
 
     for (i = 0; i < num; i++) {
 	int line = _stackprof.lines_buffer[i];
@@ -366,6 +407,9 @@ frame_mark_i(st_data_t key, st_data_t val, st_data_t arg)
 static void
 stackprof_gc_mark(void *data)
 {
+    if (RTEST(_stackprof.raw))
+	rb_gc_mark(_stackprof.raw);
+
     if (_stackprof.frames)
 	st_foreach(_stackprof.frames, frame_mark_i, 0);
 }
@@ -421,6 +465,7 @@ Init_stackprof(void)
     sym_version = ID2SYM(rb_intern("version"));
     sym_mode = ID2SYM(rb_intern("mode"));
     sym_interval = ID2SYM(rb_intern("interval"));
+    sym_raw = ID2SYM(rb_intern("raw"));
     sym_frames = ID2SYM(rb_intern("frames"));
 
     gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, NULL);

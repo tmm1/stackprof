@@ -86,6 +86,19 @@ class StackProfTest < Test::Unit::TestCase
     assert_equal [10, 10], frame[:lines][__LINE__-10]
   end
 
+  def test_raw
+    profile = StackProf.run(mode: :custom, raw: true) do
+      10.times do
+        StackProf.sample
+      end
+    end
+
+    raw = profile[:raw]
+    assert_equal 10, raw[-1]
+    assert_equal raw[0] + 2, raw.size
+    assert_equal 'block (2 levels) in StackProfTest#test_raw', profile[:frames][raw[-2]][:name]
+  end
+
   def test_fork
     StackProf.run do
       pid = fork do
