@@ -165,7 +165,7 @@ module StackProf
         f.printf "%s (%s:%d)\n", info[:name], file, line
         f.printf "  samples: % 5d self (%2.1f%%)  /  % 5d total (%2.1f%%)\n", info[:samples], 100.0*info[:samples]/overall_samples, info[:total_samples], 100.0*info[:total_samples]/overall_samples
 
-        if (callers = data[:frames].map{ |id, other| [other[:name], other[:edges][frame]] if other[:edges] && other[:edges].include?(frame) }.compact).any?
+        if (callers = callers_for(frame)).any?
           f.puts "  callers:"
           callers = callers.sort_by(&:last).reverse
           callers.each do |name, weight|
@@ -206,6 +206,11 @@ module StackProf
     end
 
     private
+
+    def callers_for(addr)
+      @callers_for ||= {}
+      @callers_for[addr] ||= data[:frames].map{ |id, other| [other[:name], other[:edges][addr]] if other[:edges] && other[:edges].include?(addr) }.compact
+    end
 
     def source_display(f, file, lines, range=nil)
       File.readlines(file).each_with_index do |code, i|
