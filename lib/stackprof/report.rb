@@ -207,6 +207,10 @@ module StackProf
 
     private
 
+    def root_frames
+      frames.select{ |addr, frame| callers_for(addr).size == 0  }
+    end
+
     def callers_for(addr)
       @callers_for ||= {}
       @callers_for[addr] ||= data[:frames].map{ |id, other| [other[:name], other[:edges][addr]] if other[:edges] && other[:edges].include?(addr) }.compact
