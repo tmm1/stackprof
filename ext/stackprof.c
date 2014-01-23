@@ -2,13 +2,7 @@
 
   stackprof.c - Sampling call-stack frame profiler for MRI.
 
-  $Author$
-  created at: Thu May 30 17:55:25 2013
-
-  NOTE: This extension library is not expected to exist except C Ruby.
-
-  All the files in this distribution are covered under the Ruby's
-  license (see the file COPYING).
+  vim: setl noexpandtab shiftwidth=4 tabstop=8 softtabstop=4
 
 **********************************************************************/
 
