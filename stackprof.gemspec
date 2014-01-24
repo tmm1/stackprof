@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = 'stackprof'
-  s.version = '0.2.2'
+  s.version = '0.2.3'
   s.homepage = 'http://github.com/tmm1/stackprof'
 
   s.authors = 'Aman Gupta'
