@@ -20,6 +20,7 @@ parser = OptionParser.new(ARGV) do |o|
   o.on('--callgrind', 'Callgrind output (use with kcachegrind, stackprof-gprof2dot.py)'){ options[:format] = :callgrind }
   o.on('--graphviz', "Graphviz output (use with dot)"){ options[:format] = :graphviz }
   o.on('--stackcollapse', 'stackcollapse.pl compatible output (use with stackprof-flamegraph.pl)'){ options[:format] = :stackcollapse }
+  o.on('--flamegraph', "timeline-flamegraph output (js)\n\n"){ options[:format] = :flamegraph }
   o.on('--dump', 'Print marshaled profile dump (combine multiple profiles)'){ options[:format] = :dump }
   o.on('--debug', 'Pretty print raw profile data'){ options[:format] = :debug }
 end
@@ -51,6 +52,8 @@ when :graphviz
   report.print_graphviz
 when :stackcollapse
   report.print_stackcollapse
+when :flamegraph
+  report.print_flamegraph
 when :method
   report.print_method(options[:filter])
 when :file
