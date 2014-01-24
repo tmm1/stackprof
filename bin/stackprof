@@ -17,6 +17,7 @@ parser = OptionParser.new(ARGV) do |o|
   o.on('--sort-total', "Sort --text or --files output on total samples\n\n"){ options[:sort] = true }
   o.on('--method [grep]', 'Zoom into specified method'){ |f| options[:format] = :method; options[:filter] = f }
   o.on('--file [grep]', 'Show annotated code for specified file'){ |f| options[:format] = :file; options[:filter] = f }
+  o.on('--stackcollapse', 'stackcollapse.pl compatible output (use with flamegraph.pl)'){ options[:format] = :stackcollapse }
   o.on('--callgrind', 'Callgrind output (use with kcachegrind, gprof2dot)'){ options[:format] = :callgrind }
   o.on('--graphviz', "Graphviz output (use with dot)\n\n"){ options[:format] = :graphviz }
   o.on('--dump', 'Print marshaled profile dump (combine multiple profiles)'){ options[:format] = :dump }
@@ -48,6 +49,8 @@ when :callgrind
   report.print_callgrind
 when :graphviz
   report.print_graphviz
+when :stackcollapse
+  report.print_stackcollapse
 when :method
   report.print_method(options[:filter])
 when :file

@@ -67,6 +67,18 @@ module StackProf
       puts Marshal.dump(@data.reject{|k,v| k == :files })
     end
 
+    def print_stackcollapse
+      raise "profile does not include raw samples" unless raw = data[:raw]
+
+      while len = raw.shift
+        frames = raw.slice!(0, len)
+        weight = raw.shift
+
+        print frames.map{ |a| data[:frames][a][:name] }.join(';')
+        puts " #{weight}"
+      end
+    end
+
     def print_graphviz(filter = nil, f = STDOUT)
       if filter
         mark_stack = []
