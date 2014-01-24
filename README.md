@@ -10,10 +10,9 @@ and written as a replacement for [perftools.rb](https://github.com/tmm1/perftool
 in ruby:
 
 ``` ruby
-profile = StackProf.run(mode: :cpu) do
+StackProf.run(mode: :cpu, out: 'tmp/stackprof-cpu-myapp.dump') do
   ...
 end
-File.open('tmp/stackprof-cpu-myapp.dump', 'wb'){ |f| f.write Marshal.dump(profile) }
 ```
 
 via rack:

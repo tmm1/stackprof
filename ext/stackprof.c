@@ -9,6 +9,8 @@
 #include <ruby/ruby.h>
 #include <ruby/debug.h>
 #include <ruby/st.h>
+#include <ruby/io.h>
+#include <ruby/intern.h>
 #include <signal.h>
 #include <sys/time.h>
 #include <pthread.h>
@@ -28,6 +30,7 @@ static struct {
     VALUE interval;
     VALUE raw;
     size_t raw_sample_index;
+    VALUE out;
 
     size_t overall_signals;
     size_t overall_samples;
@@ -40,7 +43,7 @@ static struct {
 
 static VALUE sym_object, sym_wall, sym_cpu, sym_custom, sym_name, sym_file, sym_line;
 static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_lines;
-static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_frames;
+static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_frames, sym_out;
 static VALUE sym_gc_samples, objtracer;
 static VALUE gc_hook;
 static VALUE rb_mStackProf;
@@ -53,7 +56,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 {
     struct sigaction sa;
     struct itimerval timer;
-    VALUE opts = Qnil, mode = Qnil, interval = Qnil, raw = Qfalse;
+    VALUE opts = Qnil, mode = Qnil, interval = Qnil, raw = Qfalse, out = Qfalse;
 
     if (_stackprof.running)
 	return Qfalse;
@@ -63,9 +66,10 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     if (RTEST(opts)) {
 	mode = rb_hash_aref(opts, sym_mode);
 	interval = rb_hash_aref(opts, sym_interval);
-	if (RTEST(rb_hash_aref(opts, sym_raw))) {
+	out = rb_hash_aref(opts, sym_out);
+
+	if (RTEST(rb_hash_aref(opts, sym_raw)))
 	    raw = rb_ary_new();
-	}
     }
     if (!RTEST(mode)) mode = sym_wall;
 
@@ -104,6 +108,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.raw = raw;
     _stackprof.mode = mode;
     _stackprof.interval = interval;
+    _stackprof.out = out;
 
     return Qtrue;
 }
@@ -207,7 +212,7 @@ frame_i(st_data_t key, st_data_t val, st_data_t arg)
 }
 
 static VALUE
-stackprof_results(VALUE self)
+stackprof_results(int argc, VALUE *argv, VALUE self)
 {
     VALUE results, frames;
 
@@ -234,7 +239,23 @@ stackprof_results(VALUE self)
 	_stackprof.raw = Qfalse;
     }
 
-    return results;
+    if (argc == 1)
+	_stackprof.out = argv[0];
+
+    if (RTEST(_stackprof.out)) {
+	VALUE file;
+	if (RB_TYPE_P(_stackprof.out, T_STRING)) {
+	    file = rb_file_open_str(_stackprof.out, "w");
+	} else {
+	    file = rb_io_check_io(_stackprof.out);
+	}
+	rb_marshal_dump(results, file);
+	rb_io_flush(file);
+	_stackprof.out = Qnil;
+	return file;
+    } else {
+	return results;
+    }
 }
 
 static VALUE
@@ -243,7 +264,7 @@ stackprof_run(int argc, VALUE *argv, VALUE self)
     rb_need_block();
     stackprof_start(argc, argv, self);
     rb_ensure(rb_yield, Qundef, stackprof_stop, self);
-    return stackprof_results(self);
+    return stackprof_results(0, 0, self);
 }
 
 static VALUE
@@ -295,7 +316,6 @@ stackprof_record_sample()
 {
     int num, i, n;
     int raw_mode = RTEST(_stackprof.raw);
-    size_t newhash = 0;
     VALUE prev_frame = Qnil;
     size_t raw_len;
 
@@ -381,6 +401,7 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 static void
 stackprof_newobj_handler(VALUE tpval, void *data)
 {
+    /* TODO: implement interval */
     _stackprof.overall_signals++;
     stackprof_job_handler(0);
 }
@@ -409,6 +430,8 @@ stackprof_gc_mark(void *data)
 {
     if (RTEST(_stackprof.raw))
 	rb_gc_mark(_stackprof.raw);
+    if (RTEST(_stackprof.out))
+	rb_gc_mark(_stackprof.out);
 
     if (_stackprof.frames)
 	st_foreach(_stackprof.frames, frame_mark_i, 0);
@@ -466,6 +489,7 @@ Init_stackprof(void)
     sym_mode = ID2SYM(rb_intern("mode"));
     sym_interval = ID2SYM(rb_intern("interval"));
     sym_raw = ID2SYM(rb_intern("raw"));
+    sym_out = ID2SYM(rb_intern("out"));
     sym_frames = ID2SYM(rb_intern("frames"));
 
     gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, NULL);
@@ -476,7 +500,7 @@ Init_stackprof(void)
     rb_define_singleton_method(rb_mStackProf, "run", stackprof_run, -1);
     rb_define_singleton_method(rb_mStackProf, "start", stackprof_start, -1);
     rb_define_singleton_method(rb_mStackProf, "stop", stackprof_stop, 0);
-    rb_define_singleton_method(rb_mStackProf, "results", stackprof_results, 0);
+    rb_define_singleton_method(rb_mStackProf, "results", stackprof_results, -1);
     rb_define_singleton_method(rb_mStackProf, "sample", stackprof_sample, 0);
 
     rb_autoload(rb_mStackProf, rb_intern_const("Report"), "stackprof/report.rb");

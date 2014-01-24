@@ -1,6 +1,7 @@
 $:.unshift File.expand_path('../../lib', __FILE__)
 require 'stackprof'
 require 'test/unit'
+require 'tempfile'
 
 class StackProfTest < Test::Unit::TestCase
   def test_info
@@ -120,6 +121,18 @@ class StackProfTest < Test::Unit::TestCase
     assert_empty profile[:frames]
     assert_operator profile[:gc_samples], :>, 0
     assert_equal 0, profile[:missed_samples]
+  end
+
+  def test_out
+    tmpfile = Tempfile.new('stackprof-out')
+    ret = StackProf.run(mode: :custom, out: tmpfile) do
+      StackProf.sample
+    end
+
+    assert_equal tmpfile, ret
+    tmpfile.rewind
+    profile = Marshal.load(tmpfile.read)
+    assert_not_empty profile[:frames]
   end
 
   def math
