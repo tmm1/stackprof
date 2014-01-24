@@ -11,6 +11,8 @@ Gem::Specification.new do |s|
 
   s.bindir = 'bin'
   s.executables << 'stackprof'
+  s.executables << 'stackprof-flamegraph'
+  s.executables << 'stackprof-gprof2dot'
 
   s.summary = 'sampling callstack-profiler for ruby 2.1+'
   s.description = 'stackprof is a fast sampling profiler for ruby code, with cpu, wallclock and object allocation samplers.'
