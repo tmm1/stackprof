@@ -26,11 +26,17 @@ typedef struct {
 
 static struct {
     int running;
+    int raw;
+    int aggregate;
+
     VALUE mode;
     VALUE interval;
-    VALUE raw;
-    size_t raw_sample_index;
     VALUE out;
+
+    VALUE *raw_samples;
+    size_t raw_samples_len;
+    size_t raw_samples_capa;
+    size_t raw_sample_index;
 
     size_t overall_signals;
     size_t overall_samples;
@@ -43,7 +49,7 @@ static struct {
 
 static VALUE sym_object, sym_wall, sym_cpu, sym_custom, sym_name, sym_file, sym_line;
 static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_lines;
-static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_frames, sym_out;
+static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_frames, sym_out, sym_aggregate;
 static VALUE sym_gc_samples, objtracer;
 static VALUE gc_hook;
 static VALUE rb_mStackProf;
@@ -56,7 +62,8 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 {
     struct sigaction sa;
     struct itimerval timer;
-    VALUE opts = Qnil, mode = Qnil, interval = Qnil, raw = Qfalse, out = Qfalse;
+    VALUE opts = Qnil, mode = Qnil, interval = Qnil, out = Qfalse;
+    int raw = 0, aggregate = 1;
 
     if (_stackprof.running)
 	return Qfalse;
@@ -69,7 +76,9 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	out = rb_hash_aref(opts, sym_out);
 
 	if (RTEST(rb_hash_aref(opts, sym_raw)))
-	    raw = rb_ary_new();
+	    raw = 1;
+	if (rb_hash_lookup2(opts, sym_aggregate, Qundef) == Qfalse)
+	    aggregate = 0;
     }
     if (!RTEST(mode)) mode = sym_wall;
 
@@ -106,6 +115,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 
     _stackprof.running = 1;
     _stackprof.raw = raw;
+    _stackprof.aggregate = aggregate;
     _stackprof.mode = mode;
     _stackprof.interval = interval;
     _stackprof.out = out;
@@ -234,9 +244,27 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     st_free_table(_stackprof.frames);
     _stackprof.frames = NULL;
 
-    if (RTEST(_stackprof.raw)) {
-	rb_hash_aset(results, sym_raw, _stackprof.raw);
-	_stackprof.raw = Qfalse;
+    if (_stackprof.raw && _stackprof.raw_samples_len) {
+	size_t len, n, o;
+	VALUE raw_samples = rb_ary_new_capa(_stackprof.raw_samples_len);
+
+	for (n = 0; n < _stackprof.raw_samples_len; n++) {
+	    len = (size_t)_stackprof.raw_samples[n];
+	    rb_ary_push(raw_samples, SIZET2NUM(len));
+
+	    for (o = 0, n++; o < len; n++, o++)
+		rb_ary_push(raw_samples, rb_obj_id(_stackprof.raw_samples[n]));
+	    rb_ary_push(raw_samples, SIZET2NUM((size_t)_stackprof.raw_samples[n]));
+	}
+
+	free(_stackprof.raw_samples);
+	_stackprof.raw_samples = NULL;
+	_stackprof.raw_samples_len = 0;
+	_stackprof.raw_samples_capa = 0;
+	_stackprof.raw_sample_index = 0;
+	_stackprof.raw = 0;
+
+	rb_hash_aset(results, sym_raw, raw_samples);
     }
 
     if (argc == 1)
@@ -315,37 +343,44 @@ void
 stackprof_record_sample()
 {
     int num, i, n;
-    int raw_mode = RTEST(_stackprof.raw);
     VALUE prev_frame = Qnil;
-    size_t raw_len;
 
     _stackprof.overall_samples++;
     num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer), _stackprof.frames_buffer, _stackprof.lines_buffer);
 
-    if (raw_mode) {
+    if (_stackprof.raw) {
 	int found = 0;
-	raw_len = RARRAY_LEN(_stackprof.raw);
 
-	if (RARRAY_LEN(_stackprof.raw) > 0 && RARRAY_AREF(_stackprof.raw, _stackprof.raw_sample_index) == INT2FIX(num)) {
+	if (!_stackprof.raw_samples) {
+	    _stackprof.raw_samples_capa = num * 100;
+	    _stackprof.raw_samples = malloc(sizeof(VALUE) * _stackprof.raw_samples_capa);
+	}
+
+	if (_stackprof.raw_samples_capa <= _stackprof.raw_samples_len + num) {
+	    _stackprof.raw_samples_capa *= 2;
+	    _stackprof.raw_samples = realloc(_stackprof.raw_samples, _stackprof.raw_samples_capa);
+	}
+
+	if (_stackprof.raw_samples_len > 0 && _stackprof.raw_samples[_stackprof.raw_sample_index] == (VALUE)num) {
 	    for (i = num-1, n = 0; i >= 0; i--, n++) {
 		VALUE frame = _stackprof.frames_buffer[i];
-		if (RARRAY_AREF(_stackprof.raw, _stackprof.raw_sample_index + 1 + n) != rb_obj_id(frame))
+		if (_stackprof.raw_samples[_stackprof.raw_sample_index + 1 + n] != frame)
 		    break;
 	    }
 	    if (i == -1) {
-		RARRAY_ASET(_stackprof.raw, raw_len-1, LONG2NUM(NUM2LONG(RARRAY_AREF(_stackprof.raw, raw_len-1))+1));
+		_stackprof.raw_samples[_stackprof.raw_samples_len-1] += 1;
 		found = 1;
 	    }
 	}
 
 	if (!found) {
-	    _stackprof.raw_sample_index = raw_len;
-	    rb_ary_push(_stackprof.raw, INT2FIX(num));
+	    _stackprof.raw_sample_index = _stackprof.raw_samples_len;
+	    _stackprof.raw_samples[_stackprof.raw_samples_len++] = (VALUE)num;
 	    for (i = num-1; i >= 0; i--) {
 		VALUE frame = _stackprof.frames_buffer[i];
-		rb_ary_push(_stackprof.raw, rb_obj_id(frame));
+		_stackprof.raw_samples[_stackprof.raw_samples_len++] = frame;
 	    }
-	    rb_ary_push(_stackprof.raw, INT2FIX(1));
+	    _stackprof.raw_samples[_stackprof.raw_samples_len++] = (VALUE)1;
 	}
     }
 
@@ -358,13 +393,13 @@ stackprof_record_sample()
 
 	if (i == 0) {
 	    frame_data->caller_samples++;
-	} else {
+	} else if (_stackprof.aggregate) {
 	    if (!frame_data->edges)
 		frame_data->edges = st_init_numtable();
 	    st_numtable_increment(frame_data->edges, (st_data_t)prev_frame, 1);
 	}
 
-	if (line > 0) {
+	if (_stackprof.aggregate && line > 0) {
 	    if (!frame_data->lines)
 		frame_data->lines = st_init_numtable();
 	    size_t half = (size_t)1<<(8*SIZEOF_SIZE_T/2);
@@ -428,8 +463,6 @@ frame_mark_i(st_data_t key, st_data_t val, st_data_t arg)
 static void
 stackprof_gc_mark(void *data)
 {
-    if (RTEST(_stackprof.raw))
-	rb_gc_mark(_stackprof.raw);
     if (RTEST(_stackprof.out))
 	rb_gc_mark(_stackprof.out);
 
@@ -472,25 +505,28 @@ stackprof_atfork_child(void)
 void
 Init_stackprof(void)
 {
-    sym_object = ID2SYM(rb_intern("object"));
-    sym_custom = ID2SYM(rb_intern("custom"));
-    sym_wall = ID2SYM(rb_intern("wall"));
-    sym_cpu = ID2SYM(rb_intern("cpu"));
-    sym_name = ID2SYM(rb_intern("name"));
-    sym_file = ID2SYM(rb_intern("file"));
-    sym_line = ID2SYM(rb_intern("line"));
-    sym_total_samples = ID2SYM(rb_intern("total_samples"));
-    sym_gc_samples = ID2SYM(rb_intern("gc_samples"));
-    sym_missed_samples = ID2SYM(rb_intern("missed_samples"));
-    sym_samples = ID2SYM(rb_intern("samples"));
-    sym_edges = ID2SYM(rb_intern("edges"));
-    sym_lines = ID2SYM(rb_intern("lines"));
-    sym_version = ID2SYM(rb_intern("version"));
-    sym_mode = ID2SYM(rb_intern("mode"));
-    sym_interval = ID2SYM(rb_intern("interval"));
-    sym_raw = ID2SYM(rb_intern("raw"));
-    sym_out = ID2SYM(rb_intern("out"));
-    sym_frames = ID2SYM(rb_intern("frames"));
+#define S(name) sym_##name = ID2SYM(rb_intern(#name));
+    S(object);
+    S(custom);
+    S(wall);
+    S(cpu);
+    S(name);
+    S(file);
+    S(line);
+    S(total_samples);
+    S(gc_samples);
+    S(missed_samples);
+    S(samples);
+    S(edges);
+    S(lines);
+    S(version);
+    S(mode);
+    S(interval);
+    S(raw);
+    S(out);
+    S(frames);
+    S(aggregate);
+#undef S
 
     gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, NULL);
     rb_global_variable(&gc_hook);
