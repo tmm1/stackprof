@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    stackprof (0.2.2)
+    stackprof (0.2.4)
 
 GEM
   remote: https://rubygems.org/
@@ -17,6 +17,6 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  mocha
-  rake-compiler
+  mocha (~> 0.14)
+  rake-compiler (~> 0.9)
   stackprof!
