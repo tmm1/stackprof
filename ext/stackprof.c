@@ -358,7 +358,7 @@ stackprof_record_sample()
 
 	if (_stackprof.raw_samples_capa <= _stackprof.raw_samples_len + num) {
 	    _stackprof.raw_samples_capa *= 2;
-	    _stackprof.raw_samples = realloc(_stackprof.raw_samples, _stackprof.raw_samples_capa);
+	    _stackprof.raw_samples = realloc(_stackprof.raw_samples, sizeof(VALUE) * _stackprof.raw_samples_capa);
 	}
 
 	if (_stackprof.raw_samples_len > 0 && _stackprof.raw_samples[_stackprof.raw_sample_index] == (VALUE)num) {

@@ -101,7 +101,7 @@ module StackProf
 
           if cell.nil?
             if row_prev
-              flamegraph_row(x - row_width, y, row_width, row_prev)
+              flamegraph_row(f, x - row_width, y, row_width, row_prev)
             end
 
             row_prev = nil
@@ -119,7 +119,7 @@ module StackProf
             x += weight
 
           else                    # end current row and start new row
-            flamegraph_row(x - row_width, y, row_width, row_prev)
+            flamegraph_row(f, x - row_width, y, row_width, row_prev)
             x += weight
             row_prev = cell
             row_width = weight
@@ -131,15 +131,15 @@ module StackProf
         if row_prev
           next if skip_common && row_width == max_x
 
-          flamegraph_row(x - row_width, y, row_width, row_prev)
+          flamegraph_row(f, x - row_width, y, row_width, row_prev)
         end
       end
       f.puts '])'
     end
 
-    def flamegraph_row(x, y, weight, addr)
+    def flamegraph_row(f, x, y, weight, addr)
       frame = frames[addr]
-      print ',' if @rows_started
+      f.print ',' if @rows_started
       @rows_started = true
       f.puts %{{"x":#{x},"y":#{y},"width":#{weight},"frame_id":#{addr},"frame":#{frame[:name].dump},"file":#{frame[:file].dump}}}
     end
