@@ -15,10 +15,11 @@ module StackProf
     end
 
     def call(env)
-      StackProf.start(mode: Middleware.mode, interval: Middleware.interval) if Middleware.enabled?
+      enabled = Middleware.enabled?
+      StackProf.start(mode: Middleware.mode, interval: Middleware.interval) if enabled
       @app.call(env)
     ensure
-      if Middleware.enabled?
+      if enabled
         StackProf.stop
         if @num_reqs && (@num_reqs-=1) == 0
           @num_reqs = @options[:save_every]
