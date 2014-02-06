@@ -38,4 +38,26 @@ class StackProf::MiddlewareTest < Test::Unit::TestCase
     StackProf::Middleware.save
   end
 
+  def test_enabled_should_use_a_proc_if_passed
+    env = {}
+
+    StackProf::Middleware.new(Object.new, enabled: Proc.new{ false })
+    refute StackProf::Middleware.enabled?(env)
+
+    StackProf::Middleware.new(Object.new, enabled: Proc.new{ true })
+    assert StackProf::Middleware.enabled?(env)
+  end
+
+  def test_enabled_should_use_a_proc_if_passed_and_use_the_request_env
+    enable_proc = Proc.new {|env| env['PROFILE'] }
+
+    env = Hash.new { false }
+    StackProf::Middleware.new(Object.new, enabled: enable_proc)
+    refute StackProf::Middleware.enabled?(env)
+
+    env = Hash.new { true}
+    StackProf::Middleware.new(Object.new, enabled: enable_proc)
+    assert StackProf::Middleware.enabled?(env)
+  end
+
 end

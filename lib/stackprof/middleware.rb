@@ -15,10 +15,11 @@ module StackProf
     end
 
     def call(env)
-      StackProf.start(mode: Middleware.mode, interval: Middleware.interval) if Middleware.enabled?
+      enabled = Middleware.enabled?(env)
+      StackProf.start(mode: Middleware.mode, interval: Middleware.interval) if enabled
       @app.call(env)
     ensure
-      if Middleware.enabled?
+      if enabled
         StackProf.stop
         if @num_reqs && (@num_reqs-=1) == 0
           @num_reqs = @options[:save_every]
@@ -29,7 +30,14 @@ module StackProf
 
     class << self
       attr_accessor :enabled, :mode, :interval, :path
-      alias enabled? enabled
+
+      def enabled?(env)
+        if enabled.respond_to?(:call)
+          enabled.call(env)
+        else
+          enabled
+        end
+      end
 
       def save(filename = nil)
         if results = StackProf.results
