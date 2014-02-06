@@ -38,4 +38,12 @@ class StackProf::MiddlewareTest < Test::Unit::TestCase
     StackProf::Middleware.save
   end
 
+  def test_enabled_should_use_a_proc_if_passed
+    StackProf::Middleware.new(Object.new, enabled: Proc.new{ false })
+    refute StackProf::Middleware.enabled?
+
+    StackProf::Middleware.new(Object.new, enabled: Proc.new{ true })
+    assert StackProf::Middleware.enabled?
+  end
+
 end

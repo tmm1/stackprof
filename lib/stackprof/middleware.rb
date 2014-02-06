@@ -29,7 +29,14 @@ module StackProf
 
     class << self
       attr_accessor :enabled, :mode, :interval, :path
-      alias enabled? enabled
+
+      def enabled?
+        if enabled.respond_to?(:call)
+          enabled.call
+        else
+          enabled
+        end
+      end
 
       def save(filename = nil)
         if results = StackProf.results
