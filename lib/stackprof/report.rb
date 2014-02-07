@@ -83,12 +83,14 @@ module StackProf
       raise "profile does not include raw samples" unless raw = data[:raw]
 
       stacks = []
+      max_x = 0
       max_y = 0
       while len = raw.shift
         max_y = len if len > max_y
-        stacks << raw.slice!(0, len+1)
+        stack = raw.slice!(0, len+1)
+        stacks << stack
+        max_x += stack.last
       end
-      max_x = stacks.inject(0){ |sum, (*stack, weight)| sum + weight }
 
       f.puts 'flamegraph(['
       max_y.times do |y|
@@ -96,8 +98,9 @@ module StackProf
         row_width = 0
         x = 0
 
-        stacks.each do |*stack, weight|
-          cell = stack[y]
+        stacks.each do |stack|
+          weight = stack.last
+          cell = stack[y] unless y == stack.length-1
 
           if cell.nil?
             if row_prev
