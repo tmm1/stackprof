@@ -7,6 +7,19 @@ and written as a replacement for [perftools.rb](https://github.com/tmm1/perftool
 
 ### getting started
 
+#### Install
+
+In your Gemfile add:
+
+```ruby
+gem 'stackprof'
+```
+
+Then run `$ bundle install`. Alternatively you can run `$ gem install stackprof`.
+
+
+#### Run
+
 in ruby:
 
 ``` ruby
