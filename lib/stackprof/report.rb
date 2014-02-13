@@ -222,7 +222,7 @@ module StackProf
           f.puts "#{line} #{weight.is_a?(Array) ? weight[1] : weight}"
         end if frame[:lines]
         frame[:edges].each do |edge, weight|
-          oframe = list[edge.to_s]
+          oframe = list[edge]
           f.puts "cfl=#{oframe[:file]}" unless oframe[:file] == frame[:file]
           f.puts "cfn=#{oframe[:name]}"
           f.puts "calls=#{weight} #{frame[:line] || 0}\n#{oframe[:line] || 0} #{weight}"
