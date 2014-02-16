@@ -346,7 +346,7 @@ stackprof_record_sample()
     VALUE prev_frame = Qnil;
 
     _stackprof.overall_samples++;
-    num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer), _stackprof.frames_buffer, _stackprof.lines_buffer);
+    num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
 
     if (_stackprof.raw) {
 	int found = 0;
