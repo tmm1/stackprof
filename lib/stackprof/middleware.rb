@@ -15,8 +15,8 @@ module StackProf
     end
 
     def call(env)
-      enabled = Middleware.enabled?
-      StackProf.start(mode: Middleware.mode, interval: Middleware.interval) if enabled
+      enabled, mode = Middleware.enabled?
+      StackProf.start(mode: mode || Middleware.mode, interval: Middleware.interval) if enabled
       @app.call(env)
     ensure
       if enabled
