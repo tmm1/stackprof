@@ -92,7 +92,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     if (mode == sym_object) {
 	if (!RTEST(interval)) interval = INT2FIX(1);
 
-	objtracer = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, stackprof_newobj_handler, 0);
+	objtracer = rb_tracepoint_new(Qnil, RUBY_INTERNAL_EVENT_NEWOBJ, stackprof_newobj_handler, 0);
 	rb_tracepoint_enable(objtracer);
     } else if (mode == sym_wall || mode == sym_cpu) {
 	if (!RTEST(interval)) interval = INT2FIX(1000);
