@@ -15,28 +15,35 @@ module StackProf
     end
 
     def call(env)
-      enabled = Middleware.enabled?(env)
-      StackProf.start(mode: Middleware.mode, interval: Middleware.interval) if enabled
+
+      if enabled = Middleware.enabled?(env)
+        @mode ||= Middleware.mode(env)
+        StackProf.start(mode: @mode, interval: Middleware.interval)
+      end
+
       @app.call(env)
+
     ensure
       if enabled
         StackProf.stop
         if @num_reqs && (@num_reqs-=1) == 0
           @num_reqs = @options[:save_every]
           Middleware.save
+          @mode = nil
         end
       end
     end
 
     class << self
-      attr_accessor :enabled, :mode, :interval, :path
+      attr_accessor :enabled, :interval, :path
+      attr_writer :mode
 
       def enabled?(env)
-        if enabled.respond_to?(:call)
-          enabled.call(env)
-        else
-          enabled
-        end
+        enabled.respond_to?(:call) ? enabled.call(env) : enabled
+      end
+
+      def mode(env)
+        @mode.respond_to?(:call) ? @mode.call(env) : @mode
       end
 
       def save(filename = nil)
