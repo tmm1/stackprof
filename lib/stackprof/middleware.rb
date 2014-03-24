@@ -11,7 +11,7 @@ module StackProf
       Middleware.interval = options[:interval] || 1000
       Middleware.enabled  = options[:enabled]
       Middleware.path     = options[:path] || 'tmp'
-      at_exit{ Middleware.save? } if options[:save_at_exit]
+      at_exit{ Middleware.save } if options[:save_at_exit]
     end
 
     def call(env)
