@@ -285,40 +285,6 @@ module StackProf
       end
     end
 
-    private
-
-    def root_frames
-      frames.select{ |addr, frame| callers_for(addr).size == 0  }
-    end
-
-    def callers_for(addr)
-      @callers_for ||= {}
-      @callers_for[addr] ||= data[:frames].map{ |id, other| [other[:name], other[:edges][addr]] if other[:edges] && other[:edges].include?(addr) }.compact
-    end
-
-    def source_display(f, file, lines, range=nil)
-      File.readlines(file).each_with_index do |code, i|
-        next unless range.nil? || range.include?(i)
-        if lines and lineinfo = lines[i+1]
-          total_samples, samples = lineinfo
-          if version == 1.0
-            samples = total_samples
-            f.printf "% 5d % 7s  | % 5d  | %s", samples, "(%2.1f%%)" % (100.0*samples/overall_samples), i+1, code
-          elsif samples > 0
-            f.printf "% 5d  % 8s / % 5d  % 7s  | % 5d  | %s", total_samples, "(%2.1f%%)" % (100.0*total_samples/overall_samples), samples, "(%2.1f%%)" % (100.0*samples/overall_samples), i+1, code
-          else
-            f.printf "% 5d  % 8s                   | % 5d  | %s", total_samples, "(%3.1f%%)" % (100.0*total_samples/overall_samples), i+1, code
-          end
-        else
-          if version == 1.0
-            f.printf "               | % 5d  | %s", i+1, code
-          else
-            f.printf "                                  | % 5d  | %s", i+1, code
-          end
-        end
-      end
-    end
-
     def +(other)
       raise ArgumentError, "cannot combine #{other.class}" unless self.class == other.class
       raise ArgumentError, "cannot combine #{modeline} with #{other.modeline}" unless modeline == other.modeline
@@ -364,5 +330,39 @@ module StackProf
 
       self.class.new(data)
     end
+
+    private
+    def root_frames
+      frames.select{ |addr, frame| callers_for(addr).size == 0  }
+    end
+
+    def callers_for(addr)
+      @callers_for ||= {}
+      @callers_for[addr] ||= data[:frames].map{ |id, other| [other[:name], other[:edges][addr]] if other[:edges] && other[:edges].include?(addr) }.compact
+    end
+
+    def source_display(f, file, lines, range=nil)
+      File.readlines(file).each_with_index do |code, i|
+        next unless range.nil? || range.include?(i)
+        if lines and lineinfo = lines[i+1]
+          total_samples, samples = lineinfo
+          if version == 1.0
+            samples = total_samples
+            f.printf "% 5d % 7s  | % 5d  | %s", samples, "(%2.1f%%)" % (100.0*samples/overall_samples), i+1, code
+          elsif samples > 0
+            f.printf "% 5d  % 8s / % 5d  % 7s  | % 5d  | %s", total_samples, "(%2.1f%%)" % (100.0*total_samples/overall_samples), samples, "(%2.1f%%)" % (100.0*samples/overall_samples), i+1, code
+          else
+            f.printf "% 5d  % 8s                   | % 5d  | %s", total_samples, "(%3.1f%%)" % (100.0*total_samples/overall_samples), i+1, code
+          end
+        else
+          if version == 1.0
+            f.printf "               | % 5d  | %s", i+1, code
+          else
+            f.printf "                                  | % 5d  | %s", i+1, code
+          end
+        end
+      end
+    end
+
   end
 end
