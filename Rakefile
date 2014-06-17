@@ -4,7 +4,7 @@ task :default => :test
 # Packaging
 # ==========================================================
 
-GEMSPEC = eval(File.read('stackprof.gemspec'))
+GEMSPEC = Gem::Specification::load('stackprof.gemspec')
 
 require 'rubygems/package_task'
 Gem::PackageTask.new(GEMSPEC) do |pkg|
