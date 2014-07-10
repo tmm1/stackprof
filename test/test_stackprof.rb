@@ -51,6 +51,13 @@ class StackProfTest < Test::Unit::TestCase
     assert_equal [2, 0], frame[:lines][line-11]
   end
 
+  def test_object_allocation_interval
+    profile = StackProf.run(mode: :object, interval: 10) do
+      100.times { Object.new }
+    end
+    assert_equal 10, profile[:samples]
+  end
+
   def test_cputime
     profile = StackProf.run(mode: :cpu, interval: 500) do
       math
