@@ -436,8 +436,9 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 static void
 stackprof_newobj_handler(VALUE tpval, void *data)
 {
-    /* TODO: implement interval */
     _stackprof.overall_signals++;
+    if (RTEST(_stackprof.interval) && _stackprof.overall_signals % NUM2LONG(_stackprof.interval))
+	return;
     stackprof_job_handler(0);
 }
 
