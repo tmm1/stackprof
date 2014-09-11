@@ -21,4 +21,5 @@ Gem::Specification.new do |s|
 
   s.add_development_dependency 'rake-compiler', '~> 0.9'
   s.add_development_dependency 'mocha', '~> 0.14'
+  s.add_development_dependency 'minitest', '~> 5.0'
 end
