@@ -140,7 +140,7 @@ class StackProfTest < MiniTest::Test
     assert_equal tmpfile, ret
     tmpfile.rewind
     profile = Marshal.load(tmpfile.read)
-    assert_not_empty profile[:frames]
+    refute_empty profile[:frames]
   end
 
   def math
