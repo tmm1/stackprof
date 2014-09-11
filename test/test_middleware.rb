@@ -1,10 +1,11 @@
 $:.unshift File.expand_path('../../lib', __FILE__)
 require 'stackprof'
 require 'stackprof/middleware'
-require 'test/unit'
+require 'minitest/spec'
+require 'minitest/autorun'
 require 'mocha/setup'
 
-class StackProf::MiddlewareTest < Test::Unit::TestCase
+class StackProf::MiddlewareTest < MiniTest::Test
 
   def test_path_default
     StackProf::Middleware.new(Object.new)

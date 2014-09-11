@@ -1,9 +1,10 @@
 $:.unshift File.expand_path('../../lib', __FILE__)
 require 'stackprof'
-require 'test/unit'
+require 'minitest/spec'
+require 'minitest/autorun'
 require 'tempfile'
 
-class StackProfTest < Test::Unit::TestCase
+class StackProfTest < MiniTest::Test
   def test_info
     profile = StackProf.run{}
     assert_equal 1.1, profile[:version]
