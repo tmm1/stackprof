@@ -1,9 +1,9 @@
 $:.unshift File.expand_path('../../lib', __FILE__)
 require 'stackprof'
-require 'test/unit'
+require 'minitest/autorun'
 require 'tempfile'
 
-class StackProfTest < Test::Unit::TestCase
+class StackProfTest < MiniTest::Test
   def test_info
     profile = StackProf.run{}
     assert_equal 1.1, profile[:version]
@@ -139,7 +139,7 @@ class StackProfTest < Test::Unit::TestCase
     assert_equal tmpfile, ret
     tmpfile.rewind
     profile = Marshal.load(tmpfile.read)
-    assert_not_empty profile[:frames]
+    refute_empty profile[:frames]
   end
 
   def math
