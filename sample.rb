@@ -34,7 +34,7 @@ end
 
 result = StackProf::Report.new(profile)
 puts
-result.print_source(/pow|newobj|math/)
+result.print_method(/pow|newobj|math/)
 puts
 result.print_text
 puts

@@ -186,7 +186,7 @@ digraph profile {
 }
 ```
 
-#### `StackProf::Report.new(data).print_source(/pow|newobj|math/)`
+#### `StackProf::Report.new(data).print_method(/pow|newobj|math/)`
 
 ```
 A#pow (/Users/tmm1/code/stackprof/sample.rb:11)
