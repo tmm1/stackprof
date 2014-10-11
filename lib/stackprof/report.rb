@@ -278,8 +278,7 @@ module StackProf
 
     def print_file(filter, f = STDOUT)
       filter = /#{Regexp.escape filter}/ unless Regexp === filter
-      list = files
-      list.select!{ |name, lines| name =~ filter }
+      list = files.select{ |name, lines| name =~ filter }
       list.sort_by{ |file, vals| -vals.values.inject(0){ |sum, n| sum + (n.is_a?(Array) ? n[1] : n) } }.each do |file, lines|
         source_display(f, file, lines)
       end
