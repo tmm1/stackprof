@@ -55,9 +55,13 @@ class StackProf::MiddlewareTest < MiniTest::Test
     StackProf::Middleware.new(Object.new, enabled: enable_proc)
     refute StackProf::Middleware.enabled?(env)
 
-    env = Hash.new { true}
+    env = Hash.new { true }
     StackProf::Middleware.new(Object.new, enabled: enable_proc)
     assert StackProf::Middleware.enabled?(env)
   end
 
+  def test_raw
+    StackProf::Middleware.new(Object.new, raw: true)
+    assert StackProf::Middleware.raw
+  end
 end
