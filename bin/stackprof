@@ -52,6 +52,7 @@ if options[:format] == :graphviz
 end
 
 options = default_options.merge(options)
+options.delete(:limit) if options[:limit] == 0
 
 case options[:format]
 when :text

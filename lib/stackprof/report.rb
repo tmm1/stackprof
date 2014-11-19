@@ -167,13 +167,20 @@ module StackProf
         list = frames(true)
       end
 
+
       limit = options[:limit]
       fraction = options[:node_fraction]
 
       included_nodes = {}
-      node_minimum = fraction ? fraction * overall_samples : 0
+      node_minimum = fraction ? (fraction * overall_samples).ceil : 0
 
       f.puts "digraph profile {"
+      f.puts "Legend [shape=box,fontsize=24,shape=plaintext,label=\""
+      f.print "Total samples: #{overall_samples}\\l"
+      f.print "Showing top #{limit} nodes\\l" if limit
+      f.print "Dropped nodes with < #{node_minimum} samples\\l" if fraction
+      f.puts "\"];"
+
       list.each_with_index do |(frame, info), index|
         call, total = info.values_at(:samples, :total_samples)
         break if total < node_minimum || (limit && index >= limit)
