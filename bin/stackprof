@@ -2,23 +2,20 @@
 require 'optparse'
 require 'stackprof'
 
-options = {
-  :format => :text,
-  :sort => false,
-  :limit => 30
-}
+options = {}
 
 parser = OptionParser.new(ARGV) do |o|
   o.banner = "Usage: stackprof [file.dump]+ [--text|--method=NAME|--callgrind|--graphviz]"
 
   o.on('--text', 'Text summary per method (default)'){ options[:format] = :text }
   o.on('--files', 'List of files'){ |f| options[:format] = :files }
-  o.on('--limit [num]', Integer, 'Limit --text or --files output to N lines'){ |n| options[:limit] = n }
+  o.on('--limit [num]', Integer, 'Limit --text, --files, or --graphviz output to N entries'){ |n| options[:limit] = n }
   o.on('--sort-total', "Sort --text or --files output on total samples\n\n"){ options[:sort] = true }
   o.on('--method [grep]', 'Zoom into specified method'){ |f| options[:format] = :method; options[:filter] = f }
   o.on('--file [grep]', "Show annotated code for specified file\n\n"){ |f| options[:format] = :file; options[:filter] = f }
   o.on('--callgrind', 'Callgrind output (use with kcachegrind, stackprof-gprof2dot.py)'){ options[:format] = :callgrind }
   o.on('--graphviz', "Graphviz output (use with dot)"){ options[:format] = :graphviz }
+  o.on('--node-fraction [frac]', OptionParser::DecimalNumeric, 'Drop nodes representing less than [frac] fraction of samples'){ |n| options[:node_fraction] = n }
   o.on('--stackcollapse', 'stackcollapse.pl compatible output (use with stackprof-flamegraph.pl)'){ options[:format] = :stackcollapse }
   o.on('--flamegraph', "timeline-flamegraph output (js)"){ options[:format] = :flamegraph }
   o.on('--flamegraph-viewer [f.js]', String, "open html viewer for flamegraph output\n\n"){ |file|
@@ -43,6 +40,19 @@ while ARGV.size > 0
 end
 report = reports.inject(:+)
 
+default_options = {
+  :format => :text,
+  :sort => false,
+  :limit => 30
+}
+
+if options[:format] == :graphviz
+  default_options[:limit] = 120
+  default_options[:node_fraction] = 0.005
+end
+
+options = default_options.merge(options)
+
 case options[:format]
 when :text
   report.print_text(options[:sort], options[:limit])
@@ -53,7 +63,7 @@ when :dump
 when :callgrind
   report.print_callgrind
 when :graphviz
-  report.print_graphviz
+  report.print_graphviz(options)
 when :stackcollapse
   report.print_stackcollapse
 when :flamegraph

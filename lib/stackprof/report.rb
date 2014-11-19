@@ -147,10 +147,10 @@ module StackProf
       f.puts %{{"x":#{x},"y":#{y},"width":#{weight},"frame_id":#{addr},"frame":#{frame[:name].dump},"file":#{frame[:file].dump}}}
     end
 
-    def print_graphviz(filter = nil, f = STDOUT)
-      if filter
+    def print_graphviz(options = {}, f = STDOUT)
+      if filter = options[:filter]
         mark_stack = []
-        list = frames
+        list = frames(true)
         list.each{ |addr, frame| mark_stack << addr if frame[:name] =~ filter }
         while addr = mark_stack.pop
           frame = list[addr]
@@ -164,12 +164,20 @@ module StackProf
         list.each{ |addr, frame| frame[:edges] && frame[:edges].delete_if{ |k,v| list[k.to_s].nil? } }
         list
       else
-        list = frames
+        list = frames(true)
       end
 
+      limit = options[:limit]
+      fraction = options[:node_fraction]
+
+      included_nodes = {}
+      node_minimum = fraction ? fraction * overall_samples : 0
+
       f.puts "digraph profile {"
-      list.each do |frame, info|
+      list.each_with_index do |(frame, info), index|
         call, total = info.values_at(:samples, :total_samples)
+        break if total < node_minimum || (limit && index >= limit)
+
         sample = ''
         sample << "#{call} (%2.1f%%)\\rof " % (call*100.0/overall_samples) if call < total
         sample << "#{total} (%2.1f%%)\\r" % (total*100.0/overall_samples)
@@ -177,8 +185,16 @@ module StackProf
         size = (1.0 * total / overall_samples) * 2.0 + 0.5
 
         f.puts "  \"#{frame}\" [size=#{size}] [fontsize=#{fontsize}] [penwidth=\"#{size}\"] [shape=box] [label=\"#{info[:name]}\\n#{sample}\"];"
+        included_nodes[frame] = true
+      end
+
+      list.each do |frame, info|
+        next unless included_nodes[frame]
+
         if edges = info[:edges]
           edges.each do |edge, weight|
+            next unless included_nodes[edge]
+
             size = (1.0 * weight / overall_samples) * 2.0 + 0.5
             f.puts "  \"#{frame}\" -> \"#{edge}\" [label=\"#{weight}\"] [weight=\"#{weight}\"] [penwidth=\"#{size}\"];"
           end
