@@ -1,9 +1,9 @@
 $:.unshift File.expand_path('../../lib', __FILE__)
 require 'stackprof'
-require 'test/unit'
+require 'minitest/autorun'
 require 'tempfile'
 
-class StackProfTest < Test::Unit::TestCase
+class StackProfTest < MiniTest::Test
   def test_info
     profile = StackProf.run{}
     assert_equal 1.1, profile[:version]
@@ -49,6 +49,13 @@ class StackProfTest < Test::Unit::TestCase
 
     frame = profile[:frames].values[1]
     assert_equal [2, 0], frame[:lines][line-11]
+  end
+
+  def test_object_allocation_interval
+    profile = StackProf.run(mode: :object, interval: 10) do
+      100.times { Object.new }
+    end
+    assert_equal 10, profile[:samples]
   end
 
   def test_cputime
@@ -132,7 +139,7 @@ class StackProfTest < Test::Unit::TestCase
     assert_equal tmpfile, ret
     tmpfile.rewind
     profile = Marshal.load(tmpfile.read)
-    assert_not_empty profile[:frames]
+    refute_empty profile[:frames]
   end
 
   def math
