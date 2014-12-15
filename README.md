@@ -274,3 +274,7 @@ StackProf.results
 
 * file/iseq blacklist
 * restore signal handlers on stop
+
+### License
+
+MIT
