@@ -63,8 +63,8 @@ module StackProf
       pp @data
     end
 
-    def print_dump
-      puts Marshal.dump(@data.reject{|k,v| k == :files })
+    def print_dump(f=STDOUT)
+      f.puts Marshal.dump(@data.reject{|k,v| k == :files })
     end
 
     def print_stackcollapse

@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    stackprof (0.2.6)
+    stackprof (0.2.7)
 
 GEM
   remote: https://rubygems.org/
