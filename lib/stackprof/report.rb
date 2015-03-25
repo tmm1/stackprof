@@ -155,13 +155,12 @@ module StackProf
         while addr = mark_stack.pop
           frame = list[addr]
           unless frame[:marked]
-            $stderr.puts frame[:edges].inspect
-            mark_stack += frame[:edges].map{ |addr, weight| addr.to_s if list[addr.to_s][:total_samples] <= weight*1.2 }.compact if frame[:edges]
+            mark_stack += frame[:edges].map{ |addr, weight| addr if list[addr][:total_samples] <= weight*1.2 }.compact if frame[:edges]
             frame[:marked] = true
           end
         end
         list = list.select{ |addr, frame| frame[:marked] }
-        list.each{ |addr, frame| frame[:edges] && frame[:edges].delete_if{ |k,v| list[k.to_s].nil? } }
+        list.each{ |addr, frame| frame[:edges] && frame[:edges].delete_if{ |k,v| list[k].nil? } }
         list
       else
         list = frames
