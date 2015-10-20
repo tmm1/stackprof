@@ -270,17 +270,17 @@ StackProf.stop
 StackProf.results
 ```
 
-### All options
+### all options
 
 `StackProf.run` accepts an options hash. Currently, the following options are recognized:
 
-Option    | Meaning
--------   | ---------
-aggregate | see [Aggregation](#aggregation)
-mode      | mode of sampling: `:cpu`, `:wall`, `:object`, or `:custom` [c.f.](#sampling)
-interval  | mode-relative sample rate [c.f.](#sampling)
-out       | the target file, which will be overwritten
-raw       | defaults `false` - if `true` collects the extra data required by the `--flamegraph` and `--stackcollapse` report types
+Option      | Meaning
+-------     | ---------
+`mode`      | mode of sampling: `:cpu`, `:wall`, `:object`, or `:custom` [c.f.](#sampling)
+`out`       | the target file, which will be overwritten
+`interval`  | mode-relative sample rate [c.f.](#sampling)
+`aggregate` | defaults: `true` - if `false` disables [aggregation](#aggregation)
+`raw`       | defaults `false` - if `true` collects the extra data required by the `--flamegraph` and `--stackcollapse` report types
 
 ### todo
 
