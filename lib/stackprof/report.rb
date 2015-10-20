@@ -68,7 +68,7 @@ module StackProf
     end
 
     def print_stackcollapse
-      raise "profile does not include raw samples" unless raw = data[:raw]
+      raise "profile does not include raw samples (add `raw: true` to collecting StackProf.run)" unless raw = data[:raw]
 
       while len = raw.shift
         frames = raw.slice!(0, len)
@@ -80,7 +80,7 @@ module StackProf
     end
 
     def print_flamegraph(f=STDOUT, skip_common=true)
-      raise "profile does not include raw samples" unless raw = data[:raw]
+      raise "profile does not include raw samples (add `raw: true` to collecting StackProf.run)" unless raw = data[:raw]
 
       stacks = []
       max_x = 0
