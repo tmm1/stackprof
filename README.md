@@ -265,9 +265,9 @@ multiple start/stop invocations.
 
 ``` ruby
 StackProf.running?
-StackProf.start
+StackProf.start(mode: :cpu)
 StackProf.stop
-StackProf.results
+StackProf.results('/tmp/some.file')
 ```
 
 ### all options
