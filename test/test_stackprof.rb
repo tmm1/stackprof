@@ -31,6 +31,7 @@ class StackProfTest < MiniTest::Test
   end
 
   def test_object_allocation
+    profile_base_line = __LINE__+1
     profile = StackProf.run(mode: :object) do
       Object.new
       Object.new
@@ -42,13 +43,12 @@ class StackProfTest < MiniTest::Test
     frame = profile[:frames].values.first
     assert_equal "block in StackProfTest#test_object_allocation", frame[:name]
     assert_equal 2, frame[:samples]
-    line = __LINE__
-    assert_equal line-11, frame[:line]
-    assert_equal [1, 1], frame[:lines][line-10]
-    assert_equal [1, 1], frame[:lines][line-9]
+    assert_equal profile_base_line, frame[:line]
+    assert_equal [1, 1], frame[:lines][profile_base_line+1]
+    assert_equal [1, 1], frame[:lines][profile_base_line+2]
 
     frame = profile[:frames].values[1]
-    assert_equal [2, 0], frame[:lines][line-11]
+    assert_equal [2, 0], frame[:lines][profile_base_line]
   end
 
   def test_object_allocation_interval
@@ -79,6 +79,7 @@ class StackProfTest < MiniTest::Test
   end
 
   def test_custom
+    profile_base_line = __LINE__+1
     profile = StackProf.run(mode: :custom) do
       10.times do
         StackProf.sample
@@ -90,8 +91,8 @@ class StackProfTest < MiniTest::Test
 
     frame = profile[:frames].values.first
     assert_equal "block (2 levels) in StackProfTest#test_custom", frame[:name]
-    assert_equal __LINE__-10, frame[:line]
-    assert_equal [10, 10], frame[:lines][__LINE__-10]
+    assert_equal profile_base_line+1, frame[:line]
+    assert_equal [10, 10], frame[:lines][profile_base_line+2]
   end
 
   def test_raw
