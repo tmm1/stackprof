@@ -9,7 +9,7 @@ module StackProf
     attr_reader :data
 
     def frames(sort_by_total=false)
-      Hash[ *@data[:frames].sort_by{ |iseq, stats| -stats[sort_by_total ? :total_samples : :samples] }.flatten(1) ]
+      *@data[:frames].sort_by{ |iseq, stats| -stats[sort_by_total ? :total_samples : :samples] }.inject({}){|h, (k, v)| h[k] = v; h}
     end
 
     def normalized_frames
