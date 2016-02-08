@@ -529,7 +529,7 @@ Init_stackprof(void)
     S(aggregate);
 #undef S
 
-    gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, NULL);
+    gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, &_stackprof);
     rb_global_variable(&gc_hook);
 
     rb_mStackProf = rb_define_module("StackProf");
