@@ -209,7 +209,7 @@ module StackProf
       f.puts "}"
     end
 
-    def print_text(sort_by_total=false, limit=nil, f = STDOUT)
+    def print_text(sort_by_total=false, limit=nil, select_files= nil, reject_files=nil, select_names=nil, reject_names=nil, f = STDOUT)
       f.puts "=================================="
       f.printf "  Mode: #{modeline}\n"
       f.printf "  Samples: #{@data[:samples]} (%.2f%% miss rate)\n", 100.0*@data[:missed_samples]/(@data[:missed_samples]+@data[:samples])
@@ -217,6 +217,10 @@ module StackProf
       f.puts "=================================="
       f.printf "% 10s    (pct)  % 10s    (pct)     FRAME\n" % ["TOTAL", "SAMPLES"]
       list = frames(sort_by_total)
+      list.select!{|_, info| select_files.any?{|path| info[:file].start_with?(path)}} if select_files
+      list.select!{|_, info| select_names.any?{|reg| info[:name] =~ reg}} if select_names
+      list.reject!{|_, info| reject_files.any?{|path| info[:file].start_with?(path)}} if reject_files
+      list.reject!{|_, info| reject_names.any?{|reg| info[:name] =~ reg}} if reject_names
       list = list.first(limit) if limit
       list.each do |frame, info|
         call, total = info.values_at(:samples, :total_samples)
