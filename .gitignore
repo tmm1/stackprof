@@ -1,4 +1,4 @@
 /tmp
-/lib/stackprof.bundle
-/lib/stackprof.so
+/lib/stackprof/stackprof.bundle
+/lib/stackprof/stackprof.so
 *.sw?

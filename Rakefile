@@ -17,6 +17,7 @@ end
 require 'rake/extensiontask'
 Rake::ExtensionTask.new('stackprof', GEMSPEC) do |ext|
   ext.ext_dir = 'ext'
+  ext.lib_dir = 'lib/stackprof'
 end
 task :build => :compile
 
