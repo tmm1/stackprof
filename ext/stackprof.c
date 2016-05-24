@@ -2,7 +2,7 @@
 
   stackprof.c - Sampling call-stack frame profiler for MRI.
 
-  vim: setl noexpandtab shiftwidth=4 tabstop=8 softtabstop=4
+  vim: noexpandtab shiftwidth=4 tabstop=8 softtabstop=4
 
 **********************************************************************/
 
