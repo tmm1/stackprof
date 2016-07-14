@@ -24,7 +24,7 @@ in ruby:
 
 ``` ruby
 StackProf.run(mode: :cpu, out: 'tmp/stackprof-cpu-myapp.dump') do
-  ...
+  #...
 end
 ```
 
@@ -77,6 +77,22 @@ $ stackprof tmp/stackprof-cpu-*.dump --method 'Object#present?'
 
 For an experimental version of WebUI reporting of stackprof, see [stackprof-webnav](https://github.com/alisnic/stackprof-webnav)
 
+You can generate a flamegraph however additional data must be collected using the `raw: true` flag. Once you've collected results with this flag enabled you can generate a flamegraph:
+
+```
+$ stackprof --flamegraph tmp/stackprof-cpu-myapp.dump > tmp/flamegraph
+```
+
+Once the flamegraph has been generated you can generate a viewer command with:
+
+```
+$ stackprof --flamegraph-viewer=tmp/flamegraph
+```
+
+The `--flamegraph-viewer` command will output the exact shell command you need to run to open the `tmp/flamegraph` you generated with the built in stackprof flamegraph viewer:
+
+![](http://i.imgur.com/EwndrgD.png)
+
 ### sampling
 
 four sampling modes are supported:
@@ -89,8 +105,29 @@ four sampling modes are supported:
 samplers have a tuneable interval which can be used to reduce overhead or increase granularity:
 
   - wall time: sample every _interval_ microseconds of wallclock time (default: 1000)
+
+```ruby
+StackProf.run(mode: :wall, out: 'tmp/stackprof.dump', interval: 1000) do
+  #...
+end
+```
+
   - cpu time: sample every _interval_ microseconds of cpu activity (default: 1000 = 1 millisecond)
+
+```ruby
+StackProf.run(mode: :cpu, out: 'tmp/stackprof.dump', interval: 1000) do
+  #...
+end
+```
+
   - object allocation: sample every _interval_ allocations (default: 1)
+
+
+```ruby
+StackProf.run(mode: :object, out: 'tmp/stackprof.dump', interval: 1) do
+  #...
+end
+```
 
 samples are taken using a combination of three new C-APIs in ruby 2.1:
 
@@ -105,7 +142,7 @@ samples are taken using a combination of three new C-APIs in ruby 2.1:
   - in allocation mode, samples are taken via `rb_tracepoint_new(RUBY_INTERNAL_EVENT_NEWOBJ)`,
     which provides a notification every time the VM allocates a new object.
 
-### aggregation
+### Aggregation
 
 each sample consists of N stack frames, where a frame looks something like `MyClass#method` or `block in MySingleton.method`.
 for each of these frames in the sample, the profiler collects a few pieces of metadata:
