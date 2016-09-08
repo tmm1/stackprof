@@ -292,6 +292,47 @@ module StackProf
       end
     end
 
+    # Walk up and down the stack from a given starting point (name).  Loops
+    # until `:exit` is selected
+    def walk_method(name)
+      method_choice  = /#{Regexp.escape name}/
+      invalid_choice = false
+
+      # Continue walking up and down the stack until the users selects "exit"
+      while method_choice != :exit
+        print_method method_choice unless invalid_choice
+        STDOUT.puts "\n\n"
+
+        # Determine callers and callees for the current frame
+        new_frames  = frames.select  {|_, info| info[:name] =~ method_choice }
+        new_choices = new_frames.map {|frame, info| [
+          callers_for(frame).sort_by(&:last).reverse.map(&:first),
+          (info[:edges] || []).map{ |k, w| [data[:frames][k][:name], w] }.sort_by{ |k,v| -v }.map(&:first)
+        ]}.flatten + [:exit]
+
+        # Print callers and callees for selection
+        STDOUT.puts "Select next method:"
+        new_choices.each_with_index do |method, index|
+          STDOUT.printf "%2d)  %s\n", index + 1, method.to_s
+        end
+
+        # Pick selection
+        STDOUT.printf "> "
+        selection = STDIN.gets.chomp.to_i - 1
+        STDOUT.puts "\n\n\n"
+
+        # Determine if it was a valid choice
+        # (if not, don't re-run .print_method)
+        if new_choice = new_choices[selection]
+          invalid_choice = false
+          method_choice = new_choice == :exit ? :exit : %r/^#{Regexp.escape new_choice}$/
+        else
+          invalid_choice = true
+          STDOUT.puts "Invalid choice.  Please select again..."
+        end
+      end
+    end
+
     def print_files(sort_by_total=false, limit=nil, f = STDOUT)
       list = files.map{ |file, vals| [file, vals.values.inject([0,0]){ |sum, n| add_lines(sum, n) }] }
       list = list.sort_by{ |file, samples| -samples[1] }
