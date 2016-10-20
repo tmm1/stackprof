@@ -22,9 +22,17 @@
     height: 1;
     background-color: rgba(0, 0, 0, 0.25);
     transform-origin: top left;
+    cursor: -moz-grab;
+    cursor: -webkit-grab;
+    cursor: grab;
   }
   .clickthrough {
     pointer-events: none;
+  }
+  .moving {
+    cursor: -moz-grabbing;
+    cursor: -webkit-grabbing;
+    cursor: grabbing;
   }
   .info {
     display: block;
