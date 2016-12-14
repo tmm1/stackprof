@@ -12,7 +12,8 @@ parser = OptionParser.new(ARGV) do |o|
   o.on('--limit [num]', Integer, 'Limit --text, --files, or --graphviz output to N entries'){ |n| options[:limit] = n }
   o.on('--sort-total', "Sort --text or --files output on total samples\n\n"){ options[:sort] = true }
   o.on('--method [grep]', 'Zoom into specified method'){ |f| options[:format] = :method; options[:filter] = f }
-  o.on('--file [grep]', "Show annotated code for specified file\n\n"){ |f| options[:format] = :file; options[:filter] = f }
+  o.on('--file [grep]', "Show annotated code for specified file"){ |f| options[:format] = :file; options[:filter] = f }
+  o.on('--walk', "Walk the stacktrace interactively\n\n"){ |f| options[:walk] = true }
   o.on('--callgrind', 'Callgrind output (use with kcachegrind, stackprof-gprof2dot.py)'){ options[:format] = :callgrind }
   o.on('--graphviz', "Graphviz output (use with dot)"){ options[:format] = :graphviz }
   o.on('--node-fraction [frac]', OptionParser::DecimalNumeric, 'Drop nodes representing less than [frac] fraction of samples'){ |n| options[:node_fraction] = n }
@@ -74,7 +75,7 @@ when :stackcollapse
 when :flamegraph
   report.print_flamegraph
 when :method
-  report.print_method(options[:filter])
+  options[:walk] ? report.walk_method(options[:filter]) : report.print_method(options[:filter])
 when :file
   report.print_file(options[:filter])
 when :files
