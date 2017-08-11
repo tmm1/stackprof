@@ -24,9 +24,9 @@ class A
   end
 end
 
-#profile = StackProf.run(:object, 1) do
-#profile = StackProf.run(:wall, 1000) do
-profile = StackProf.run(:cpu, 1000) do
+#profile = StackProf.run(mode: :object, interval: 1) do
+#profile = StackProf.run(mode: :wall, interval: 1000) do
+profile = StackProf.run(mode: :cpu, interval: 1000) do
   1_000_000.times do
     A.new
   end
