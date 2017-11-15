@@ -43,6 +43,7 @@ static struct {
     size_t during_gc;
     st_table *frames;
 
+    VALUE fake_gc_frame;
     VALUE frames_buffer[BUF_SIZE];
     int lines_buffer[BUF_SIZE];
 } _stackprof;
@@ -187,16 +188,24 @@ frame_i(st_data_t key, st_data_t val, st_data_t arg)
 
     rb_hash_aset(results, rb_obj_id(frame), details);
 
-    name = rb_profile_frame_full_label(frame);
+    if (frame == _stackprof.fake_gc_frame) {
+	name = rb_str_new_literal("(garbage collection)");
+	file = rb_str_new_literal("");
+	line = INT2FIX(0);
+    } else {
+	name = rb_profile_frame_full_label(frame);
+
+	file = rb_profile_frame_absolute_path(frame);
+	if (NIL_P(file))
+	    file = rb_profile_frame_path(frame);
+	line = rb_profile_frame_first_lineno(frame);
+    }
+
     rb_hash_aset(details, sym_name, name);
-
-    file = rb_profile_frame_absolute_path(frame);
-    if (NIL_P(file))
-	file = rb_profile_frame_path(frame);
     rb_hash_aset(details, sym_file, file);
-
-    if ((line = rb_profile_frame_first_lineno(frame)) != INT2FIX(0))
+    if (line != INT2FIX(0)) {
 	rb_hash_aset(details, sym_line, line);
+    }
 
     rb_hash_aset(details, sym_total_samples, SIZET2NUM(frame_data->total_samples));
     rb_hash_aset(details, sym_samples, SIZET2NUM(frame_data->caller_samples));
@@ -340,13 +349,12 @@ st_numtable_increment(st_table *table, st_data_t key, size_t increment)
 }
 
 void
-stackprof_record_sample()
+stackprof_record_sample_for_stack(int num)
 {
-    int num, i, n;
+    int i, n;
     VALUE prev_frame = Qnil;
 
     _stackprof.overall_samples++;
-    num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
 
     if (_stackprof.raw) {
 	int found = 0;
@@ -411,6 +419,14 @@ stackprof_record_sample()
     }
 }
 
+void
+stackprof_record_sample()
+{
+    int num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
+    stackprof_record_sample_for_stack(num);
+}
+
+
 static void
 stackprof_job_handler(void *data)
 {
@@ -427,10 +443,14 @@ static void
 stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 {
     _stackprof.overall_signals++;
-    if (rb_during_gc())
-	_stackprof.during_gc++, _stackprof.overall_samples++;
-    else
+    if (rb_during_gc()) {
+	_stackprof.during_gc++;
+	_stackprof.frames_buffer[0] = _stackprof.fake_gc_frame;
+	_stackprof.lines_buffer[0] = -1;
+	stackprof_record_sample_for_stack(1);
+    } else {
 	rb_postponed_job_register_one(0, stackprof_job_handler, 0);
+    }
 }
 
 static void
@@ -530,6 +550,7 @@ Init_stackprof(void)
 #undef S
 
     gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, &_stackprof);
+    _stackprof.fake_gc_frame = rb_str_new_literal("fake_gc_frame");
     rb_global_variable(&gc_hook);
 
     rb_mStackProf = rb_define_module("StackProf");

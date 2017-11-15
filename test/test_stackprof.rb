@@ -120,13 +120,14 @@ class StackProfTest < MiniTest::Test
   end
 
   def test_gc
-    profile = StackProf.run(interval: 100) do
+    profile = StackProf.run(interval: 100, raw: true) do
       5.times do
         GC.start
       end
     end
 
-    assert_empty profile[:frames]
+    raw = profile[:raw]
+    assert_equal profile[:frames][raw[1]][:name], '(garbage collection)'
     assert_operator profile[:gc_samples], :>, 0
     assert_equal 0, profile[:missed_samples]
   end
