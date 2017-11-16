@@ -428,16 +428,27 @@ stackprof_record_sample()
     stackprof_record_sample_for_stack(num);
 }
 
+void
+stackprof_record_gc_sample()
+{
+    _stackprof.frames_buffer[0] = _stackprof.fake_gc_frame;
+    _stackprof.lines_buffer[0] = 0;
+    stackprof_record_sample_for_stack(1);
+}
 
 static void
-stackprof_job_handler(void *data)
+stackprof_job_handler(void *is_gc)
 {
     static int in_signal_handler = 0;
     if (in_signal_handler) return;
     if (!_stackprof.running) return;
 
     in_signal_handler++;
-    stackprof_record_sample();
+    if ((int)is_gc) {
+	stackprof_record_gc_sample();
+    } else {
+	stackprof_record_sample();
+    }
     in_signal_handler--;
 }
 
@@ -447,11 +458,9 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
     _stackprof.overall_signals++;
     if (rb_during_gc()) {
 	_stackprof.during_gc++;
-	_stackprof.frames_buffer[0] = _stackprof.fake_gc_frame;
-	_stackprof.lines_buffer[0] = -1;
-	stackprof_record_sample_for_stack(1);
+	rb_postponed_job_register_one(0, stackprof_job_handler, (void*)1);
     } else {
-	rb_postponed_job_register_one(0, stackprof_job_handler, 0);
+	rb_postponed_job_register_one(0, stackprof_job_handler, (void*)0);
     }
 }
 
@@ -554,10 +563,9 @@ Init_stackprof(void)
     gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, &_stackprof);
     rb_global_variable(&gc_hook);
 
-    _stackprof.fake_gc_frame = rb_str_new_literal("fake_gc_frame");
+    _stackprof.fake_gc_frame = INT2FIX(0x9C);
     _stackprof.empty_string = rb_str_new_literal("");
     _stackprof.fake_gc_frame_name = rb_str_new_literal("(garbage collection)");
-    rb_global_variable(&_stackprof.fake_gc_frame);
     rb_global_variable(&_stackprof.fake_gc_frame_name);
     rb_global_variable(&_stackprof.empty_string);
 
