@@ -44,6 +44,8 @@ static struct {
     st_table *frames;
 
     VALUE fake_gc_frame;
+    VALUE fake_gc_frame_name;
+    VALUE empty_string;
     VALUE frames_buffer[BUF_SIZE];
     int lines_buffer[BUF_SIZE];
 } _stackprof;
@@ -189,8 +191,8 @@ frame_i(st_data_t key, st_data_t val, st_data_t arg)
     rb_hash_aset(results, rb_obj_id(frame), details);
 
     if (frame == _stackprof.fake_gc_frame) {
-	name = rb_str_new_literal("(garbage collection)");
-	file = rb_str_new_literal("");
+	name = _stackprof.fake_gc_frame_name;
+	file = _stackprof.empty_string;
 	line = INT2FIX(0);
     } else {
 	name = rb_profile_frame_full_label(frame);
@@ -550,8 +552,13 @@ Init_stackprof(void)
 #undef S
 
     gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, &_stackprof);
+
     _stackprof.fake_gc_frame = rb_str_new_literal("fake_gc_frame");
-    rb_global_variable(&gc_hook);
+    _stackprof.empty_string = rb_str_new_literal("");
+    _stackprof.fake_gc_frame_name = rb_str_new_literal("(garbage collection)");
+    rb_global_variable(&_stackprof.fake_gc_frame);
+    rb_global_variable(&_stackprof.fake_gc_frame_name);
+    rb_global_variable(&_stackprof.empty_string);
 
     rb_mStackProf = rb_define_module("StackProf");
     rb_define_singleton_method(rb_mStackProf, "running?", stackprof_running_p, 0);
