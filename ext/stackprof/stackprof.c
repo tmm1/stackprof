@@ -366,7 +366,7 @@ stackprof_record_sample_for_stack(int num)
 	    _stackprof.raw_samples = malloc(sizeof(VALUE) * _stackprof.raw_samples_capa);
 	}
 
-	if (_stackprof.raw_samples_capa <= _stackprof.raw_samples_len + num) {
+	while (_stackprof.raw_samples_capa <= _stackprof.raw_samples_len + (num + 2)) {
 	    _stackprof.raw_samples_capa *= 2;
 	    _stackprof.raw_samples = realloc(_stackprof.raw_samples, sizeof(VALUE) * _stackprof.raw_samples_capa);
 	}
