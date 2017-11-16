@@ -552,6 +552,7 @@ Init_stackprof(void)
 #undef S
 
     gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, &_stackprof);
+    rb_global_variable(&gc_hook);
 
     _stackprof.fake_gc_frame = rb_str_new_literal("fake_gc_frame");
     _stackprof.empty_string = rb_str_new_literal("");
