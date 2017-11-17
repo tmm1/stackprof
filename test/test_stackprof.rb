@@ -18,16 +18,16 @@ class StackProfTest < MiniTest::Test
   end
 
   def test_start_stop_results
-    assert_equal nil, StackProf.results
+    assert_nil StackProf.results
     assert_equal true, StackProf.start
     assert_equal false, StackProf.start
     assert_equal true, StackProf.running?
-    assert_equal nil, StackProf.results
+    assert_nil StackProf.results
     assert_equal true, StackProf.stop
     assert_equal false, StackProf.stop
     assert_equal false, StackProf.running?
     assert_kind_of Hash, StackProf.results
-    assert_equal nil, StackProf.results
+    assert_nil StackProf.results
   end
 
   def test_object_allocation
@@ -43,11 +43,10 @@ class StackProfTest < MiniTest::Test
     frame = profile[:frames].values.first
     assert_includes "StackProfTest#test_object_allocation", frame[:name]
     assert_equal 2, frame[:samples]
-    assert_equal profile_base_line, frame[:line]
+    assert_includes [profile_base_line - 2, profile_base_line], frame[:line]
     assert_equal [1, 1], frame[:lines][profile_base_line+1]
     assert_equal [1, 1], frame[:lines][profile_base_line+2]
-
-    frame = profile[:frames].values[1]
+    frame = profile[:frames].values[1] if RUBY_VERSION < '2.2'
     assert_equal [2, 0], frame[:lines][profile_base_line]
   end
 
@@ -63,7 +62,7 @@ class StackProfTest < MiniTest::Test
       math
     end
 
-    assert_operator profile[:samples], :>, 1
+    assert_operator profile[:samples], :>=, 1
     frame = profile[:frames].values.first
     assert_includes "StackProfTest#math", frame[:name]
   end
@@ -75,7 +74,7 @@ class StackProfTest < MiniTest::Test
 
     frame = profile[:frames].values.first
     assert_equal "StackProfTest#idle", frame[:name]
-    assert_in_delta 200, frame[:samples], 5
+    assert_in_delta 200, frame[:samples], 10
   end
 
   def test_custom
@@ -91,7 +90,7 @@ class StackProfTest < MiniTest::Test
 
     frame = profile[:frames].values.first
     assert_includes "StackProfTest#test_custom", frame[:name]
-    assert_equal profile_base_line+1, frame[:line]
+    assert_includes [profile_base_line-2, profile_base_line+1], frame[:line]
     assert_equal [10, 10], frame[:lines][profile_base_line+2]
   end
 
@@ -127,9 +126,11 @@ class StackProfTest < MiniTest::Test
     end
 
     raw = profile[:raw]
-    assert_equal profile[:frames][raw[1]][:name], '(garbage collection)'
+    gc_frame = profile[:frames].values.find{ |f| f[:name] == "(garbage collection)" }
+    assert gc_frame
+    assert_equal gc_frame[:samples], profile[:gc_samples]
     assert_operator profile[:gc_samples], :>, 0
-    assert_equal 0, profile[:missed_samples]
+    assert_operator profile[:missed_samples], :<=, 1
   end
 
   def test_out
