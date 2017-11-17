@@ -130,7 +130,7 @@ class StackProfTest < MiniTest::Test
     assert gc_frame
     assert_equal gc_frame[:samples], profile[:gc_samples]
     assert_operator profile[:gc_samples], :>, 0
-    assert_operator profile[:missed_samples], :<=, 1
+    assert_operator profile[:missed_samples], :<=, 10
   end
 
   def test_out
