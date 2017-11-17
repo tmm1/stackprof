@@ -46,7 +46,7 @@ class StackProfTest < MiniTest::Test
     assert_includes [profile_base_line - 2, profile_base_line], frame[:line]
     assert_equal [1, 1], frame[:lines][profile_base_line+1]
     assert_equal [1, 1], frame[:lines][profile_base_line+2]
-    frame = profile[:frames].values[1] if RUBY_VERSION < '2.2'
+    frame = profile[:frames].values[1] if RUBY_VERSION < '2.3'
     assert_equal [2, 0], frame[:lines][profile_base_line]
   end
 
@@ -74,7 +74,7 @@ class StackProfTest < MiniTest::Test
 
     frame = profile[:frames].values.first
     assert_equal "StackProfTest#idle", frame[:name]
-    assert_in_delta 200, frame[:samples], 10
+    assert_in_delta 200, frame[:samples], 25
   end
 
   def test_custom
