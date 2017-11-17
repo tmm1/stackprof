@@ -579,8 +579,8 @@ Init_stackprof(void)
     rb_global_variable(&gc_hook);
 
     _stackprof.fake_gc_frame = INT2FIX(0x9C);
-    _stackprof.empty_string = rb_str_new_literal("");
-    _stackprof.fake_gc_frame_name = rb_str_new_literal("(garbage collection)");
+    _stackprof.empty_string = rb_str_new_cstr("");
+    _stackprof.fake_gc_frame_name = rb_str_new_cstr("(garbage collection)");
     rb_global_variable(&_stackprof.fake_gc_frame_name);
     rb_global_variable(&_stackprof.empty_string);
 
