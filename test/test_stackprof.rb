@@ -6,7 +6,7 @@ require 'tempfile'
 class StackProfTest < MiniTest::Test
   def test_info
     profile = StackProf.run{}
-    assert_equal 1.1, profile[:version]
+    assert_equal 1.2, profile[:version]
     assert_equal :wall, profile[:mode]
     assert_equal 1000, profile[:interval]
     assert_equal 0, profile[:samples]

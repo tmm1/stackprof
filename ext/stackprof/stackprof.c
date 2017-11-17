@@ -243,7 +243,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 	return Qnil;
 
     results = rb_hash_new();
-    rb_hash_aset(results, sym_version, DBL2NUM(1.1));
+    rb_hash_aset(results, sym_version, DBL2NUM(1.2));
     rb_hash_aset(results, sym_mode, _stackprof.mode);
     rb_hash_aset(results, sym_interval, _stackprof.interval);
     rb_hash_aset(results, sym_samples, SIZET2NUM(_stackprof.overall_samples));
