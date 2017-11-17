@@ -41,7 +41,7 @@ class StackProfTest < MiniTest::Test
     assert_equal 2, profile[:samples]
 
     frame = profile[:frames].values.first
-    assert_includes "StackProfTest#test_object_allocation", frame[:name]
+    assert_includes frame[:name], "StackProfTest#test_object_allocation"
     assert_equal 2, frame[:samples]
     assert_includes [profile_base_line - 2, profile_base_line], frame[:line]
     assert_equal [1, 1], frame[:lines][profile_base_line+1]
@@ -64,7 +64,7 @@ class StackProfTest < MiniTest::Test
 
     assert_operator profile[:samples], :>=, 1
     frame = profile[:frames].values.first
-    assert_includes "StackProfTest#math", frame[:name]
+    assert_includes frame[:name], "StackProfTest#math"
   end
 
   def test_walltime
@@ -89,7 +89,7 @@ class StackProfTest < MiniTest::Test
     assert_equal 10, profile[:samples]
 
     frame = profile[:frames].values.first
-    assert_includes "StackProfTest#test_custom", frame[:name]
+    assert_includes frame[:name], "StackProfTest#test_custom"
     assert_includes [profile_base_line-2, profile_base_line+1], frame[:line]
     assert_equal [10, 10], frame[:lines][profile_base_line+2]
   end
@@ -104,7 +104,7 @@ class StackProfTest < MiniTest::Test
     raw = profile[:raw]
     assert_equal 10, raw[-1]
     assert_equal raw[0] + 2, raw.size
-    assert_includes 'StackProfTest#test_raw', profile[:frames][raw[-2]][:name]
+    assert_includes profile[:frames][raw[-2]][:name], 'StackProfTest#test_raw'
   end
 
   def test_fork
