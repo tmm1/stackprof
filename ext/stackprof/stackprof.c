@@ -41,8 +41,12 @@ static struct {
     size_t overall_signals;
     size_t overall_samples;
     size_t during_gc;
+    size_t unrecorded_gc_samples;
     st_table *frames;
 
+    VALUE fake_gc_frame;
+    VALUE fake_gc_frame_name;
+    VALUE empty_string;
     VALUE frames_buffer[BUF_SIZE];
     int lines_buffer[BUF_SIZE];
 } _stackprof;
@@ -187,16 +191,24 @@ frame_i(st_data_t key, st_data_t val, st_data_t arg)
 
     rb_hash_aset(results, rb_obj_id(frame), details);
 
-    name = rb_profile_frame_full_label(frame);
+    if (frame == _stackprof.fake_gc_frame) {
+	name = _stackprof.fake_gc_frame_name;
+	file = _stackprof.empty_string;
+	line = INT2FIX(0);
+    } else {
+	name = rb_profile_frame_full_label(frame);
+
+	file = rb_profile_frame_absolute_path(frame);
+	if (NIL_P(file))
+	    file = rb_profile_frame_path(frame);
+	line = rb_profile_frame_first_lineno(frame);
+    }
+
     rb_hash_aset(details, sym_name, name);
-
-    file = rb_profile_frame_absolute_path(frame);
-    if (NIL_P(file))
-	file = rb_profile_frame_path(frame);
     rb_hash_aset(details, sym_file, file);
-
-    if ((line = rb_profile_frame_first_lineno(frame)) != INT2FIX(0))
+    if (line != INT2FIX(0)) {
 	rb_hash_aset(details, sym_line, line);
+    }
 
     rb_hash_aset(details, sym_total_samples, SIZET2NUM(frame_data->total_samples));
     rb_hash_aset(details, sym_samples, SIZET2NUM(frame_data->caller_samples));
@@ -340,13 +352,12 @@ st_numtable_increment(st_table *table, st_data_t key, size_t increment)
 }
 
 void
-stackprof_record_sample()
+stackprof_record_sample_for_stack(int num)
 {
-    int num, i, n;
+    int i, n;
     VALUE prev_frame = Qnil;
 
     _stackprof.overall_samples++;
-    num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
 
     if (_stackprof.raw) {
 	int found = 0;
@@ -356,7 +367,7 @@ stackprof_record_sample()
 	    _stackprof.raw_samples = malloc(sizeof(VALUE) * _stackprof.raw_samples_capa);
 	}
 
-	if (_stackprof.raw_samples_capa <= _stackprof.raw_samples_len + num) {
+	while (_stackprof.raw_samples_capa <= _stackprof.raw_samples_len + (num + 2)) {
 	    _stackprof.raw_samples_capa *= 2;
 	    _stackprof.raw_samples = realloc(_stackprof.raw_samples, sizeof(VALUE) * _stackprof.raw_samples_capa);
 	}
@@ -411,6 +422,39 @@ stackprof_record_sample()
     }
 }
 
+void
+stackprof_record_sample()
+{
+    int num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
+    stackprof_record_sample_for_stack(num);
+}
+
+void
+stackprof_record_gc_samples()
+{
+    int i;
+
+    _stackprof.frames_buffer[0] = _stackprof.fake_gc_frame;
+    _stackprof.lines_buffer[0] = 0;
+    for (i = 0; i < _stackprof.unrecorded_gc_samples; i++) {
+	stackprof_record_sample_for_stack(1);
+    }
+    _stackprof.during_gc += _stackprof.unrecorded_gc_samples;
+    _stackprof.unrecorded_gc_samples = 0;
+}
+
+static void
+stackprof_gc_job_handler(void *data)
+{
+    static int in_signal_handler = 0;
+    if (in_signal_handler) return;
+    if (!_stackprof.running) return;
+
+    in_signal_handler++;
+    stackprof_record_gc_samples();
+    in_signal_handler--;
+}
+
 static void
 stackprof_job_handler(void *data)
 {
@@ -427,10 +471,12 @@ static void
 stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 {
     _stackprof.overall_signals++;
-    if (rb_during_gc())
-	_stackprof.during_gc++, _stackprof.overall_samples++;
-    else
-	rb_postponed_job_register_one(0, stackprof_job_handler, 0);
+    if (rb_during_gc()) {
+	_stackprof.unrecorded_gc_samples++;
+	rb_postponed_job_register_one(0, stackprof_gc_job_handler, (void*)0);
+    } else {
+	rb_postponed_job_register_one(0, stackprof_job_handler, (void*)0);
+    }
 }
 
 static void
@@ -531,6 +577,12 @@ Init_stackprof(void)
 
     gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, &_stackprof);
     rb_global_variable(&gc_hook);
+
+    _stackprof.fake_gc_frame = INT2FIX(0x9C);
+    _stackprof.empty_string = rb_str_new_cstr("");
+    _stackprof.fake_gc_frame_name = rb_str_new_cstr("(garbage collection)");
+    rb_global_variable(&_stackprof.fake_gc_frame_name);
+    rb_global_variable(&_stackprof.empty_string);
 
     rb_mStackProf = rb_define_module("StackProf");
     rb_define_singleton_method(rb_mStackProf, "running?", stackprof_running_p, 0);
