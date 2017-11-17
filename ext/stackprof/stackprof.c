@@ -41,6 +41,7 @@ static struct {
     size_t overall_signals;
     size_t overall_samples;
     size_t during_gc;
+    size_t unrecorded_gc_samples;
     st_table *frames;
 
     VALUE fake_gc_frame;
@@ -429,26 +430,40 @@ stackprof_record_sample()
 }
 
 void
-stackprof_record_gc_sample()
+stackprof_record_gc_samples()
 {
+    int i;
+
     _stackprof.frames_buffer[0] = _stackprof.fake_gc_frame;
     _stackprof.lines_buffer[0] = 0;
-    stackprof_record_sample_for_stack(1);
+    for (i = 0; i < _stackprof.unrecorded_gc_samples; i++) {
+	stackprof_record_sample_for_stack(1);
+    }
+    _stackprof.during_gc += _stackprof.unrecorded_gc_samples;
+    _stackprof.unrecorded_gc_samples = 0;
 }
 
 static void
-stackprof_job_handler(void *is_gc)
+stackprof_gc_job_handler(void *data)
 {
     static int in_signal_handler = 0;
     if (in_signal_handler) return;
     if (!_stackprof.running) return;
 
     in_signal_handler++;
-    if ((int)is_gc) {
-	stackprof_record_gc_sample();
-    } else {
-	stackprof_record_sample();
-    }
+    stackprof_record_gc_samples();
+    in_signal_handler--;
+}
+
+static void
+stackprof_job_handler(void *data)
+{
+    static int in_signal_handler = 0;
+    if (in_signal_handler) return;
+    if (!_stackprof.running) return;
+
+    in_signal_handler++;
+    stackprof_record_sample();
     in_signal_handler--;
 }
 
@@ -457,8 +472,8 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 {
     _stackprof.overall_signals++;
     if (rb_during_gc()) {
-	_stackprof.during_gc++;
-	rb_postponed_job_register_one(0, stackprof_job_handler, (void*)1);
+	_stackprof.unrecorded_gc_samples++;
+	rb_postponed_job_register_one(0, stackprof_gc_job_handler, (void*)0);
     } else {
 	rb_postponed_job_register_one(0, stackprof_job_handler, (void*)0);
     }
