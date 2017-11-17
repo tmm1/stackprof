@@ -105,6 +105,7 @@ class StackProfTest < MiniTest::Test
     assert_equal 10, raw[-1]
     assert_equal raw[0] + 2, raw.size
     assert_includes profile[:frames][raw[-2]][:name], 'StackProfTest#test_raw'
+    assert_equal 10, profile[:raw_timestamp_deltas].size
   end
 
   def test_fork
