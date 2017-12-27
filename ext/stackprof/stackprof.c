@@ -268,6 +268,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 
     if (_stackprof.raw && _stackprof.raw_samples_len) {
 	size_t len, n, o;
+	VALUE raw_timestamp_deltas;
 	VALUE raw_samples = rb_ary_new_capa(_stackprof.raw_samples_len);
 
 	for (n = 0; n < _stackprof.raw_samples_len; n++) {
@@ -287,7 +288,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 
 	rb_hash_aset(results, sym_raw, raw_samples);
 
-	VALUE raw_timestamp_deltas = rb_ary_new_capa(_stackprof.raw_timestamp_deltas_len);
+	raw_timestamp_deltas = rb_ary_new_capa(_stackprof.raw_timestamp_deltas_len);
 
 	for (n = 0; n < _stackprof.raw_timestamp_deltas_len; n++) {
 	    rb_ary_push(raw_timestamp_deltas, INT2FIX(_stackprof.raw_timestamp_deltas[n]));
@@ -455,10 +456,10 @@ stackprof_record_sample_for_stack(int num, int timestamp_delta)
 	}
 
 	if (_stackprof.aggregate && line > 0) {
-	    if (!frame_data->lines)
-		frame_data->lines = st_init_numtable();
 	    size_t half = (size_t)1<<(8*SIZEOF_SIZE_T/2);
 	    size_t increment = i == 0 ? half + 1 : half;
+	    if (!frame_data->lines)
+		frame_data->lines = st_init_numtable();
 	    st_numtable_increment(frame_data->lines, (st_data_t)line, increment);
 	}
 
@@ -474,14 +475,15 @@ void
 stackprof_record_sample()
 {
     int timestamp_delta = 0;
+    int num;
     if (_stackprof.raw) {
 	struct timeval t;
-	gettimeofday(&t, NULL);
 	struct timeval diff;
+	gettimeofday(&t, NULL);
 	timersub(&t, &_stackprof.last_sample_at, &diff);
 	timestamp_delta = (1000 * diff.tv_sec) + diff.tv_usec;
     }
-    int num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
+    num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
     stackprof_record_sample_for_stack(num, timestamp_delta);
 }
 
@@ -489,10 +491,11 @@ void
 stackprof_record_gc_samples()
 {
     int delta_to_first_unrecorded_gc_sample = 0;
+    int i;
     if (_stackprof.raw) {
 	struct timeval t;
-	gettimeofday(&t, NULL);
 	struct timeval diff;
+	gettimeofday(&t, NULL);
 	timersub(&t, &_stackprof.last_sample_at, &diff);
 
 	// We don't know when the GC samples were actually marked, so let's
@@ -502,8 +505,6 @@ stackprof_record_gc_samples()
 	    delta_to_first_unrecorded_gc_sample = 0;
 	}
     }
-
-    int i;
 
     _stackprof.frames_buffer[0] = _stackprof.fake_gc_frame;
     _stackprof.lines_buffer[0] = 0;
