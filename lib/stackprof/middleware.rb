@@ -11,8 +11,8 @@ module StackProf
       Middleware.interval = options[:interval] || 1000
       Middleware.raw      = options[:raw] || false
       Middleware.enabled  = options[:enabled]
-      Middleware.out      = options[:out] || nil
-      Middleware.path     = 'tmp'
+      options[:path]      = 'tmp/' if options[:path].to_s.empty?
+      Middleware.path     = options[:path]
       at_exit{ Middleware.save } if options[:save_at_exit]
     end
 
@@ -31,7 +31,7 @@ module StackProf
     end
 
     class << self
-      attr_accessor :enabled, :mode, :interval, :raw, :path, :out
+      attr_accessor :enabled, :mode, :interval, :raw, :path
 
       def enabled?(env)
         if enabled.respond_to?(:call)
@@ -43,13 +43,16 @@ module StackProf
 
       def save
         if results = StackProf.results
-          if Middleware.out
-            filename = File.basename(Middleware.out)
-            path = File.dirname(Middleware.out)
-          else
+          path = Middleware.path
+          is_directory = path != path.chomp('/')
+
+          if is_directory
             filename = "stackprof-#{results[:mode]}-#{Process.pid}-#{Time.now.to_i}.dump"
-            path = Middleware.path
+          else
+            filename = File.basename(path)
+            path = File.dirname(path)
           end
+
           FileUtils.mkdir_p(path)
           File.open(File.join(path, filename), 'wb') do |f|
             f.write Marshal.dump(results)
