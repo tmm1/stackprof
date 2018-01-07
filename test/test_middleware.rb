@@ -9,7 +9,7 @@ class StackProf::MiddlewareTest < MiniTest::Test
   def test_path_default
     StackProf::Middleware.new(Object.new)
 
-    assert_equal 'tmp', StackProf::Middleware.path
+    assert_equal 'tmp/', StackProf::Middleware.path
   end
 
   def test_path_custom
