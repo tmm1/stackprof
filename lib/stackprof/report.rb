@@ -55,8 +55,8 @@ module StackProf
 
     def add_lines(a, b)
       return b if a.nil?
-      return a+b if a.is_a? Fixnum
-      return [ a[0], a[1]+b ] if b.is_a? Fixnum
+      return a+b if a.is_a? Integer
+      return [ a[0], a[1]+b ] if b.is_a? Integer
       [ a[0]+b[0], a[1]+b[1] ]
     end
 
