@@ -119,6 +119,27 @@ class StackProfTest < MiniTest::Test
     end
   end
 
+  def foo(n = 10)
+    if n == 0
+      StackProf.sample
+      return
+    end
+    foo(n - 1)
+  end
+
+  def test_recursive_total_samples
+    profile = StackProf.run(mode: :cpu, raw: true) do
+      10.times do
+        foo
+      end
+    end
+
+    frame = profile[:frames].values.find do |frame|
+      frame[:name] == "StackProfTest#foo"
+    end
+    assert_equal 10, frame[:total_samples]
+  end
+
   def test_gc
     profile = StackProf.run(interval: 100, raw: true) do
       5.times do
