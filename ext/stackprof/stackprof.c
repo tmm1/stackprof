@@ -20,7 +20,7 @@
 typedef struct {
     size_t total_samples;
     size_t caller_samples;
-    int already_accounted_in_total;
+    size_t seen_at_sample_number;
     st_table *edges;
     st_table *lines;
 } frame_data_t;
@@ -434,18 +434,14 @@ stackprof_record_sample_for_stack(int num, int timestamp_delta)
     }
 
     for (i = 0; i < num; i++) {
-	VALUE frame = _stackprof.frames_buffer[i];
-	sample_for(frame)->already_accounted_in_total = 0;
-    }
-
-    for (i = 0; i < num; i++) {
 	int line = _stackprof.lines_buffer[i];
 	VALUE frame = _stackprof.frames_buffer[i];
 	frame_data_t *frame_data = sample_for(frame);
 
-	if (!frame_data->already_accounted_in_total)
+	if (frame_data->seen_at_sample_number != _stackprof.overall_samples) {
 	    frame_data->total_samples++;
-	frame_data->already_accounted_in_total = 1;
+	}
+	frame_data->seen_at_sample_number = _stackprof.overall_samples;
 
 	if (i == 0) {
 	    frame_data->caller_samples++;
