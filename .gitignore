@@ -2,5 +2,4 @@
 /lib/stackprof/stackprof.bundle
 /lib/stackprof/stackprof.so
 *.sw?
-/ext
 /pkg
