@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    stackprof (0.2.11)
+    stackprof (0.2.12)
 
 GEM
   remote: https://rubygems.org/
@@ -24,4 +24,4 @@ DEPENDENCIES
   stackprof!
 
 BUNDLED WITH
-   1.15.4
+   1.16.0
