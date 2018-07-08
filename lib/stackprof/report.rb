@@ -107,7 +107,12 @@ module StackProf
         tmp_html_file.write("<script>window.location='#{speedscope_path}\#localProfilePath=#{tmp_js_path}'</script>'")
       end
       puts "Creating temp file #{tmp_html_path}"
-      puts "open #{tmp_html_path}"
+
+      if not `which xdg-open`.empty?
+        `xdg-open #{tmp_html_path}`
+      elsif not `which open`.empty?
+        `open #{tmp_html_path}`
+      end
     end
 
     def flamegraph_row(f, x, y, weight, addr)
