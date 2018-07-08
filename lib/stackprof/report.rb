@@ -97,7 +97,7 @@ module StackProf
       end
       puts "Creating temp file #{tmp_js_path}"
 
-      speedscope_path = File.join(File.expand_path(File.dirname(__FILE__)), 'speedscope', 'speedscope', 'index.html')
+      speedscope_path = File.join(File.expand_path(File.dirname(__FILE__)), '..', '..', 'vendor', 'speedscope', 'speedscope', 'index.html')
 
       # For some silly reason, the OS X open command ignores any query parameters or hash parameters
       # passed as part of the URL. To get around this weird issue, we'll create a local HTML file

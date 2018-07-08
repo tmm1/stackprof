@@ -8,20 +8,4 @@ First, ensure you have `npm` installed: https://www.npmjs.com/get-npm. Don't wor
 stackprof will not need to have node or npm installed at all. These steps are only necessary if you
 want to update the copy of speedscope included in the sources of stackprof.
 
-Next, pull a tarball containing the latest copy of the repository.
-
-    $ npm pack speedscope
-
-Next, unpack the tarball
-
-    $ tar -xvvf speedscope-*.tgz
-
-Now, replace the existing sources with the sources contained by the tarball
-
-    $ rm -rf speedscope
-    $ mkdir speedscope
-    $ mv package/LICENSE package/dist/release/*.{html,css,js,png} speedscope
-
-Then remove the tarball & the expanded contents of the tarball
-
-    $ rm -rf package speedscope-*.tgz
+Afterwards, run the ./update.sh script in this directory.
