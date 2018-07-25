@@ -387,17 +387,29 @@ stackprof_record_sample_for_stack(int num, int timestamp_delta)
     if (_stackprof.raw) {
 	int found = 0;
 
+	/* If there's no sample buffer allocated, then allocate one.  The buffer
+	 * format is the number of frames (num), then the list of frames (from
+	 * `_stackprof.raw_samples`), followed by the number of times this
+	 * particular stack has been seen in a row.  Each "new" stack is added
+	 * to the end of the buffer, but if the previous stack is the same as
+	 * the current stack, the counter will be incremented. */
 	if (!_stackprof.raw_samples) {
 	    _stackprof.raw_samples_capa = num * 100;
 	    _stackprof.raw_samples = malloc(sizeof(VALUE) * _stackprof.raw_samples_capa);
 	}
 
+	/* If we can't fit all the samples in the buffer, double the buffer size. */
 	while (_stackprof.raw_samples_capa <= _stackprof.raw_samples_len + (num + 2)) {
 	    _stackprof.raw_samples_capa *= 2;
 	    _stackprof.raw_samples = realloc(_stackprof.raw_samples, sizeof(VALUE) * _stackprof.raw_samples_capa);
 	}
 
+	/* If we've seen this stack before in the last sample, then increment the "seen" count. */
 	if (_stackprof.raw_samples_len > 0 && _stackprof.raw_samples[_stackprof.raw_sample_index] == (VALUE)num) {
+	    /* The number of samples could have been the same, but the stack
+	     * might be different, so we need to check the stack here.  Stacks
+	     * in the raw buffer are stored in the opposite direction of stacks
+	     * in the frames buffer that came from Ruby. */
 	    for (i = num-1, n = 0; i >= 0; i--, n++) {
 		VALUE frame = _stackprof.frames_buffer[i];
 		if (_stackprof.raw_samples[_stackprof.raw_sample_index + 1 + n] != frame)
@@ -409,7 +421,11 @@ stackprof_record_sample_for_stack(int num, int timestamp_delta)
 	    }
 	}
 
+	/* If we haven't seen the stack, then add it to the buffer along with
+	 * the length of the stack and a 1 for the "seen" count */
 	if (!found) {
+	    /* Bump the `raw_sample_index` up so that the next iteration can
+	     * find the previously recorded stack size. */
 	    _stackprof.raw_sample_index = _stackprof.raw_samples_len;
 	    _stackprof.raw_samples[_stackprof.raw_samples_len++] = (VALUE)num;
 	    for (i = num-1; i >= 0; i--) {
@@ -419,17 +435,20 @@ stackprof_record_sample_for_stack(int num, int timestamp_delta)
 	    _stackprof.raw_samples[_stackprof.raw_samples_len++] = (VALUE)1;
 	}
 
+	/* If there's no timestamp delta buffer, allocate one */
 	if (!_stackprof.raw_timestamp_deltas) {
 	    _stackprof.raw_timestamp_deltas_capa = 100;
 	    _stackprof.raw_timestamp_deltas = malloc(sizeof(int) * _stackprof.raw_timestamp_deltas_capa);
 	    _stackprof.raw_timestamp_deltas_len = 0;
 	}
 
+	/* Double the buffer size if it's too small */
 	while (_stackprof.raw_timestamp_deltas_capa <= _stackprof.raw_timestamp_deltas_len + 1) {
 	    _stackprof.raw_timestamp_deltas_capa *= 2;
 	    _stackprof.raw_timestamp_deltas = realloc(_stackprof.raw_timestamp_deltas, sizeof(int) * _stackprof.raw_timestamp_deltas_capa);
 	}
 
+	/* Store the time delta (which is the amount of time between samples) */
 	_stackprof.raw_timestamp_deltas[_stackprof.raw_timestamp_deltas_len++] = timestamp_delta;
     }
 
