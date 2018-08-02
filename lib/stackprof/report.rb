@@ -83,19 +83,40 @@ module StackProf
       end
     end
 
-    def view_flamegraph_in_browser(filepath)
+    def print_speedscope_js_for_profile(filepath)
+      puts get_speedscope_js_for_profile(filepath)
+    end
+
+    def get_speedscope_js_for_profile(filepath)
       raise "profile does not include raw samples (add `raw: true` to collecting StackProf.run)" unless raw = data[:raw]
       profile_b64 = Base64.strict_encode64(JSON.generate(data))
       filename = File.basename(filepath)
-      js_source = "speedscope.loadFileFromBase64('#{filename}', '#{profile_b64}')"
+      return "speedscope.loadFileFromBase64('#{filename}', '#{profile_b64}')"
+    end
 
+    def self.view_flamegraph_in_browser(filepath)
       tmpdir = Dir.mktmpdir("stackprof")
+      file_contents = IO.binread(filepath)
 
-      tmp_js_path = File.join(tmpdir, "profile.js")
-      File.open(tmp_js_path, "w") do |tmp_js_file|
-        tmp_js_file.write(js_source)
+      if file_contents.start_with?("speedscope.")
+        # The compiled JS output has already been generated. Just use it.
+        js_path = File.expand_path(filepath)
+      else
+        # Assume the filepath refers to a stackprof profile. Generate
+        # a temporary file to read from.
+        begin
+          report = StackProf::Report.new(Marshal.load(file_contents))
+        rescue TypeError => e
+          STDERR.puts "** error parsing #{file}: #{e.inspect}"
+          return
+        end
+        js_source = report.get_speedscope_js_for_profile(filepath)
+
+        js_path = File.join(tmpdir, "profile.js")
+        File.open(js_path, "w") do |tmp_js_file|
+          tmp_js_file.write(js_source)
+        end
       end
-      puts "Creating temp file #{tmp_js_path}"
 
       speedscope_path = File.join(File.expand_path(File.dirname(__FILE__)), '..', '..', 'vendor', 'speedscope', 'speedscope', 'index.html')
 
@@ -104,14 +125,15 @@ module StackProf
       # that just redirects.
       tmp_html_path = File.join(tmpdir, "redirect.html")
       File.open(tmp_html_path, "w") do |tmp_html_file|
-        tmp_html_file.write("<script>window.location='#{speedscope_path}\#localProfilePath=#{tmp_js_path}'</script>'")
+        tmp_html_file.write("<script>window.location='#{speedscope_path}\#localProfilePath=#{js_path}'</script>'")
       end
-      puts "Creating temp file #{tmp_html_path}"
 
       if not `which xdg-open`.empty?
         `xdg-open #{tmp_html_path}`
       elsif not `which open`.empty?
         `open #{tmp_html_path}`
+      else
+        puts "Open #{tmp_html_path} in your browser to view the profile"
       end
     end
 
