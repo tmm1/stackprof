@@ -312,7 +312,13 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 	if (RB_TYPE_P(_stackprof.out, T_STRING)) {
 	    file = rb_file_open_str(_stackprof.out, "w");
 	} else {
-	    file = rb_io_check_io(_stackprof.out);
+	    ID pathname_id = rb_intern("Pathname");
+	    if (rb_const_defined(rb_cObject, pathname_id) && 
+		    rb_obj_is_kind_of(_stackprof.out, rb_const_get(rb_cObject, pathname_id)) == Qtrue) {
+		file = rb_file_open_str(rb_funcall(_stackprof.out, rb_intern("to_s"), 0), "w");
+	    } else {
+		file = rb_io_check_io(_stackprof.out);
+	    }
 	}
 	rb_marshal_dump(results, file);
 	rb_io_flush(file);
