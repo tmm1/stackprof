@@ -8,6 +8,7 @@ parser = OptionParser.new(ARGV) do |o|
   o.banner = "Usage: stackprof [file.dump]+ [--text|--method=NAME|--callgrind|--graphviz]"
 
   o.on('--text', 'Text summary per method (default)'){ options[:format] = :text }
+  o.on('--json', 'JSON output (use with web viewers)'){ options[:format] = :json }
   o.on('--files', 'List of files'){ |f| options[:format] = :files }
   o.on('--limit [num]', Integer, 'Limit --text, --files, or --graphviz output to N entries'){ |n| options[:limit] = n }
   o.on('--sort-total', "Sort --text or --files output on total samples\n\n"){ options[:sort] = true }
@@ -62,6 +63,8 @@ options.delete(:limit) if options[:limit] == 0
 case options[:format]
 when :text
   report.print_text(options[:sort], options[:limit], options[:select_files], options[:reject_files], options[:select_names], options[:reject_names])
+when :json
+  report.print_json
 when :debug
   report.print_debug
 when :dump

@@ -68,6 +68,11 @@ module StackProf
       f.puts Marshal.dump(@data.reject{|k,v| k == :files })
     end
 
+    def print_json(f=STDOUT)
+      require "json"
+      f.puts JSON.generate(@data)
+    end
+
     def print_stackcollapse
       raise "profile does not include raw samples (add `raw: true` to collecting StackProf.run)" unless raw = data[:raw]
 
