@@ -309,11 +309,12 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 
     if (RTEST(_stackprof.out)) {
 	VALUE file;
-	if (RB_TYPE_P(_stackprof.out, T_STRING)) {
-	    file = rb_file_open_str(_stackprof.out, "w");
-	} else {
+	if (rb_respond_to(_stackprof.out, rb_intern("to_io"))) {
 	    file = rb_io_check_io(_stackprof.out);
+	} else {
+	    file = rb_file_open_str(_stackprof.out, "w");
 	}
+
 	rb_marshal_dump(results, file);
 	rb_io_flush(file);
 	_stackprof.out = Qnil;
