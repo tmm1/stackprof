@@ -2,6 +2,7 @@ $:.unshift File.expand_path('../../lib', __FILE__)
 require 'stackprof'
 require 'minitest/autorun'
 require 'tempfile'
+require 'pathname'
 
 class StackProfTest < MiniTest::Test
   def test_info
@@ -174,6 +175,19 @@ class StackProfTest < MiniTest::Test
     end
 
     refute_equal tmpfile, ret
+    assert_equal tmpfile.path, ret.path
+    tmpfile.rewind
+    profile = Marshal.load(tmpfile.read)
+    refute_empty profile[:frames]
+  end
+
+  def test_pathname_out
+    tmpfile  = Tempfile.new('stackprof-out')
+    pathname = Pathname.new(tmpfile.path)
+    ret = StackProf.run(mode: :custom, out: pathname) do
+      StackProf.sample
+    end
+
     assert_equal tmpfile.path, ret.path
     tmpfile.rewind
     profile = Marshal.load(tmpfile.read)
