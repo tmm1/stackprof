@@ -167,6 +167,19 @@ class StackProfTest < MiniTest::Test
     refute_empty profile[:frames]
   end
 
+  def test_out_to_path_string
+    tmpfile = Tempfile.new('stackprof-out')
+    ret = StackProf.run(mode: :custom, out: tmpfile.path) do
+      StackProf.sample
+    end
+
+    refute_equal tmpfile, ret
+    assert_equal tmpfile.path, ret.path
+    tmpfile.rewind
+    profile = Marshal.load(tmpfile.read)
+    refute_empty profile[:frames]
+  end
+
   def math
     250_000.times do
       2 ** 10
