@@ -26,18 +26,8 @@ end
 
 #profile = StackProf.run(mode: :object, interval: 1) do
 #profile = StackProf.run(mode: :wall, interval: 1000) do
-profile = StackProf.run(mode: :cpu, interval: 1000) do
+profile = StackProf.run(mode: :cpu, interval: 1000, raw: true, out: '/tmp/stackprof.dump') do
   1_000_000.times do
     A.new
   end
 end
-
-result = StackProf::Report.new(profile)
-puts
-result.print_method(/pow|newobj|math/)
-puts
-result.print_text
-puts
-result.print_graphviz
-puts
-result.print_debug

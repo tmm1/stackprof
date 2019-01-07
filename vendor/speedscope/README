@@ -1,0 +1,11 @@
+This is an integration of https://github.com/jlfwong/speedscope into stackprof.
+
+This is done by including the built HTML, CSS, and JavaScript sources of speedscope directory into the source tree.
+
+# Updating
+
+First, ensure you have `npm` installed: https://www.npmjs.com/get-npm. Don't worry! End users of
+stackprof will not need to have node or npm installed at all. These steps are only necessary if you
+want to update the copy of speedscope included in the sources of stackprof.
+
+Afterwards, run the ./update.sh script in this directory.

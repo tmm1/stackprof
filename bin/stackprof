@@ -19,9 +19,9 @@ parser = OptionParser.new(ARGV) do |o|
   o.on('--graphviz', "Graphviz output (use with dot)"){ options[:format] = :graphviz }
   o.on('--node-fraction [frac]', OptionParser::DecimalNumeric, 'Drop nodes representing less than [frac] fraction of samples'){ |n| options[:node_fraction] = n }
   o.on('--stackcollapse', 'stackcollapse.pl compatible output (use with stackprof-flamegraph.pl)'){ options[:format] = :stackcollapse }
-  o.on('--flamegraph', "timeline-flamegraph output (js)"){ options[:format] = :flamegraph }
-  o.on('--flamegraph-viewer [f.js]', String, "open html viewer for flamegraph output\n\n"){ |file|
-    puts("open file://#{File.expand_path('../../lib/stackprof/flamegraph/viewer.html', __FILE__)}?data=#{File.expand_path(file)}")
+  o.on('--flamegraph', "output format for consumption by --flamegraph-viewer"){ options[:format] = :flamegraph }
+  o.on('--flamegraph-viewer [profile-path]', "open a viewer for the flamegraph of the given profile"){ |f|
+    StackProf::Report.view_flamegraph_in_browser(f)
     exit
   }
   o.on('--select-files []', String, 'Show results of matching files'){ |path| (options[:select_files] ||= []) << File.expand_path(path) }
@@ -76,7 +76,7 @@ when :graphviz
 when :stackcollapse
   report.print_stackcollapse
 when :flamegraph
-  report.print_flamegraph
+  report.print_speedscope_js_for_profile(file)
 when :method
   options[:walk] ? report.walk_method(options[:filter]) : report.print_method(options[:filter])
 when :file

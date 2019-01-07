@@ -1,5 +1,8 @@
 require 'pp'
 require 'digest/md5'
+require 'json'
+require 'base64'
+require 'tmpdir'
 
 module StackProf
   class Report
@@ -85,65 +88,58 @@ module StackProf
       end
     end
 
-    def print_flamegraph(f=STDOUT, skip_common=true)
+    def print_speedscope_js_for_profile(filepath)
+      puts get_speedscope_js_for_profile(filepath)
+    end
+
+    def get_speedscope_js_for_profile(filepath)
       raise "profile does not include raw samples (add `raw: true` to collecting StackProf.run)" unless raw = data[:raw]
+      profile_b64 = Base64.strict_encode64(JSON.generate(data))
+      filename = File.basename(filepath)
+      return "speedscope.loadFileFromBase64('#{filename}', '#{profile_b64}')"
+    end
 
-      stacks = []
-      max_x = 0
-      max_y = 0
-      while len = raw.shift
-        max_y = len if len > max_y
-        stack = raw.slice!(0, len+1)
-        stacks << stack
-        max_x += stack.last
-      end
+    def self.view_flamegraph_in_browser(filepath)
+      tmpdir = Dir.mktmpdir("stackprof")
+      file_contents = IO.binread(filepath)
 
-      f.puts 'flamegraph(['
-      max_y.times do |y|
-        row_prev = nil
-        row_width = 0
-        x = 0
-
-        stacks.each do |stack|
-          weight = stack.last
-          cell = stack[y] unless y == stack.length-1
-
-          if cell.nil?
-            if row_prev
-              flamegraph_row(f, x - row_width, y, row_width, row_prev)
-            end
-
-            row_prev = nil
-            x += weight
-            next
-          end
-
-          if row_prev.nil?        # start new row with this cell
-            row_width = weight
-            row_prev = cell
-            x += weight
-
-          elsif row_prev == cell  # grow current row along x-axis
-            row_width += weight
-            x += weight
-
-          else                    # end current row and start new row
-            flamegraph_row(f, x - row_width, y, row_width, row_prev)
-            x += weight
-            row_prev = cell
-            row_width = weight
-          end
-
-          row_prev = cell
+      if file_contents.start_with?("speedscope.")
+        # The compiled JS output has already been generated. Just use it.
+        js_path = File.expand_path(filepath)
+      else
+        # Assume the filepath refers to a stackprof profile. Generate
+        # a temporary file to read from.
+        begin
+          report = StackProf::Report.new(Marshal.load(file_contents))
+        rescue TypeError => e
+          STDERR.puts "** error parsing #{file}: #{e.inspect}"
+          return
         end
+        js_source = report.get_speedscope_js_for_profile(filepath)
 
-        if row_prev
-          next if skip_common && row_width == max_x
-
-          flamegraph_row(f, x - row_width, y, row_width, row_prev)
+        js_path = File.join(tmpdir, "profile.js")
+        File.open(js_path, "w") do |tmp_js_file|
+          tmp_js_file.write(js_source)
         end
       end
-      f.puts '])'
+
+      speedscope_path = File.join(File.expand_path(File.dirname(__FILE__)), '..', '..', 'vendor', 'speedscope', 'speedscope', 'index.html')
+
+      # For some silly reason, the OS X open command ignores any query parameters or hash parameters
+      # passed as part of the URL. To get around this weird issue, we'll create a local HTML file
+      # that just redirects.
+      tmp_html_path = File.join(tmpdir, "redirect.html")
+      File.open(tmp_html_path, "w") do |tmp_html_file|
+        tmp_html_file.write("<script>window.location='#{speedscope_path}\#localProfilePath=#{js_path}'</script>'")
+      end
+
+      if not `which xdg-open`.empty?
+        `xdg-open #{tmp_html_path}`
+      elsif not `which open`.empty?
+        `open #{tmp_html_path}`
+      else
+        puts "Open #{tmp_html_path} in your browser to view the profile"
+      end
     end
 
     def flamegraph_row(f, x, y, weight, addr)
