@@ -9,7 +9,7 @@ Gem::Specification.new do |s|
   s.files = `git ls-files`.split("\n")
   s.extensions = 'ext/stackprof/extconf.rb'
 
-  s.bindir = 'bin'
+  s.bindir = 'exe'
   s.executables << 'stackprof'
   s.executables << 'stackprof-flamegraph.pl'
   s.executables << 'stackprof-gprof2dot.py'
