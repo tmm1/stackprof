@@ -42,7 +42,7 @@ module StackProf
     end
 
     def files
-      @data[:files] ||= @data[:frames].inject(Hash.new) do |hash, (addr, frame)|
+      @data[:files] ||= @data[:frames].inject(Hash.new) do |hash, (_addr, frame)|
         if file = frame[:file] and lines = frame[:lines]
           hash[file] ||= Hash.new
           lines.each do |line, weight|

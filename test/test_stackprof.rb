@@ -148,7 +148,6 @@ class StackProfTest < MiniTest::Test
       end
     end
 
-    raw = profile[:raw]
     gc_frame = profile[:frames].values.find{ |f| f[:name] == "(garbage collection)" }
     assert gc_frame
     assert_equal gc_frame[:samples], profile[:gc_samples]
