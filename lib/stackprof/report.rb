@@ -377,35 +377,39 @@ module StackProf
         raise ArgumentError, "cannot combine v#{version} with v#{other_version}"
       end
 
-      all_frames = [normalized_frames] + others.map(&:normalized_frames)
+      all = [self] + others
       merged = {}
 
-      all_frames.flat_map(&:keys).uniq.each do |id|
-        all_frames.each do |frame|
-          next unless frame[id]
+      all.each do |report|
+        report.normalized_frames.each do |id, frame|
           if !merged[id]
-            merged[id] = frame[id]
-          else
-            merged[id][:total_samples] += frame[id][:total_samples]
-            merged[id][:samples] += frame[id][:samples]
-            if frame[id][:edges]
-              edges = merged[id][:edges] ||= {}
-              frame[id][:edges].each do |edge, weight|
-                edges[edge] ||= 0
-                edges[edge] += weight
-              end
+            merged[id] = frame
+            next
+          end
+
+          merged_frame = merged[id]
+
+          merged_frame[:total_samples] += frame[:total_samples]
+          merged_frame[:samples] += frame[:samples]
+
+          if frame[:edges]
+            merged_edges = (merged_frame[:edges] ||= {})
+            frame[:edges].each do |edge, weight|
+              merged_edges[edge] ||= 0
+              merged_edges[edge] += weight
             end
-            if frame[id][:lines]
-              lines = merged[id][:lines] ||= {}
-              frame[id][:lines].each do |line, weight|
-                lines[line] = add_lines(lines[line], weight)
-              end
+          end
+
+          if frame[:lines]
+            merged_lines = (merged_frame[:lines] ||= {})
+            frame[:lines].each do |line, weight|
+              merged_lines[line] = add_lines(merged_lines[line], weight)
             end
           end
         end
       end
 
-      all_data = [data] + others.map(&:data)
+      all_data = all.map(&:data)
 
       new_data = {
         version: version,
