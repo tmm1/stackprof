@@ -516,7 +516,7 @@ stackprof_record_gc_samples()
 
 	// We don't know when the GC samples were actually marked, so let's
 	// assume that they were marked at a perfectly regular interval.
-	delta_to_first_unrecorded_gc_sample = (1000 * diff.tv_sec + diff.tv_usec) - (_stackprof.unrecorded_gc_samples - 1) * _stackprof.interval;
+	delta_to_first_unrecorded_gc_sample = (1000 * diff.tv_sec + diff.tv_usec) - (_stackprof.unrecorded_gc_samples - 1) * NUM2LONG(_stackprof.interval);
 	if (delta_to_first_unrecorded_gc_sample < 0) {
 	    delta_to_first_unrecorded_gc_sample = 0;
 	}
@@ -526,7 +526,7 @@ stackprof_record_gc_samples()
     _stackprof.lines_buffer[0] = 0;
 
     for (i = 0; i < _stackprof.unrecorded_gc_samples; i++) {
-	int timestamp_delta = i == 0 ? delta_to_first_unrecorded_gc_sample : _stackprof.interval;
+	int timestamp_delta = i == 0 ? delta_to_first_unrecorded_gc_sample : NUM2LONG(_stackprof.interval);
 	stackprof_record_sample_for_stack(1, timestamp_delta);
     }
     _stackprof.during_gc += _stackprof.unrecorded_gc_samples;
