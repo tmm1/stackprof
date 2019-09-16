@@ -97,6 +97,14 @@ The `--flamegraph-viewer` command will output the exact shell command you need t
 
 ![](http://i.imgur.com/EwndrgD.png)
 
+Alternatively, you can generate a flamegraph that uses [d3-flame-graph](https://github.com/spiermar/d3-flame-graph):
+
+```
+$ stackprof --d3-flamegraph tmp/stackprof-cpu-myapp.dump > flamegraph.html
+```
+
+And just open the result by your browser.
+
 ## Sampling
 
 four sampling modes are supported:

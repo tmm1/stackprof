@@ -22,10 +22,11 @@ parser = OptionParser.new(ARGV) do |o|
   o.on('--timeline-flamegraph', "timeline-flamegraph output (js)"){ options[:format] = :timeline_flamegraph }
   o.on('--alphabetical-flamegraph', "alphabetical-flamegraph output (js)"){ options[:format] = :alphabetical_flamegraph }
   o.on('--flamegraph', "alias to --timeline-flamegraph"){ options[:format] = :timeline_flamegraph }
-  o.on('--flamegraph-viewer [f.js]', String, "open html viewer for flamegraph output\n\n"){ |file|
+  o.on('--flamegraph-viewer [f.js]', String, "open html viewer for flamegraph output"){ |file|
     puts("open file://#{File.expand_path('../../lib/stackprof/flamegraph/viewer.html', __FILE__)}?data=#{File.expand_path(file)}")
     exit
   }
+  o.on('--d3-flamegraph', "flamegraph output (html using d3-flame-graph)\n\n"){ options[:format] = :d3_flamegraph }
   o.on('--select-files []', String, 'Show results of matching files'){ |path| (options[:select_files] ||= []) << File.expand_path(path) }
   o.on('--reject-files []', String, 'Exclude results of matching files'){ |path| (options[:reject_files] ||= []) << File.expand_path(path) }
   o.on('--select-names []', Regexp, 'Show results of matching method names'){ |regexp| (options[:select_names] ||= []) << regexp }
@@ -81,6 +82,8 @@ when :timeline_flamegraph
   report.print_timeline_flamegraph
 when :alphabetical_flamegraph
   report.print_alphabetical_flamegraph
+when :d3_flamegraph
+  report.print_d3_flamegraph
 when :method
   options[:walk] ? report.walk_method(options[:filter]) : report.print_method(options[:filter])
 when :file
