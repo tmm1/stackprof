@@ -19,7 +19,9 @@ parser = OptionParser.new(ARGV) do |o|
   o.on('--graphviz', "Graphviz output (use with dot)"){ options[:format] = :graphviz }
   o.on('--node-fraction [frac]', OptionParser::DecimalNumeric, 'Drop nodes representing less than [frac] fraction of samples'){ |n| options[:node_fraction] = n }
   o.on('--stackcollapse', 'stackcollapse.pl compatible output (use with stackprof-flamegraph.pl)'){ options[:format] = :stackcollapse }
-  o.on('--flamegraph', "timeline-flamegraph output (js)"){ options[:format] = :flamegraph }
+  o.on('--timeline-flamegraph', "timeline-flamegraph output (js)"){ options[:format] = :timeline_flamegraph }
+  o.on('--alphabetical-flamegraph', "alphabetical-flamegraph output (js)"){ options[:format] = :alphabetical_flamegraph }
+  o.on('--flamegraph', "alias to --timeline-flamegraph"){ options[:format] = :timeline_flamegraph }
   o.on('--flamegraph-viewer [f.js]', String, "open html viewer for flamegraph output\n\n"){ |file|
     puts("open file://#{File.expand_path('../../lib/stackprof/flamegraph/viewer.html', __FILE__)}?data=#{File.expand_path(file)}")
     exit
@@ -75,8 +77,10 @@ when :graphviz
   report.print_graphviz(options)
 when :stackcollapse
   report.print_stackcollapse
-when :flamegraph
-  report.print_flamegraph
+when :timeline_flamegraph
+  report.print_timeline_flamegraph
+when :alphabetical_flamegraph
+  report.print_alphabetical_flamegraph
 when :method
   options[:walk] ? report.walk_method(options[:filter]) : report.print_method(options[:filter])
 when :file
