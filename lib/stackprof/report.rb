@@ -85,7 +85,15 @@ module StackProf
       end
     end
 
-    def print_flamegraph(f=STDOUT, skip_common=true)
+    def print_timeline_flamegraph(f=STDOUT, skip_common=true)
+      print_flamegraph(f, skip_common, false)
+    end
+
+    def print_alphabetical_flamegraph(f=STDOUT, skip_common=true)
+      print_flamegraph(f, skip_common, true)
+    end
+
+    def print_flamegraph(f, skip_common, alphabetical=false)
       raise "profile does not include raw samples (add `raw: true` to collecting StackProf.run)" unless raw = data[:raw]
 
       stacks = []
@@ -97,6 +105,8 @@ module StackProf
         stacks << stack
         max_x += stack.last
       end
+
+      stacks.sort! if alphabetical
 
       f.puts 'flamegraph(['
       max_y.times do |y|
