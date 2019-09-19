@@ -70,7 +70,7 @@ module StackProf
 
     def print_json(f=STDOUT)
       require "json"
-      f.puts JSON.generate(@data)
+      f.puts JSON.generate(@data, max_nesting: false)
     end
 
     def print_stackcollapse
@@ -210,7 +210,7 @@ module StackProf
       stacks.sort!
 
       require "json"
-      json = JSON.generate(convert_to_d3_flame_graph_format("<root>", stacks, 0))
+      json = JSON.generate(convert_to_d3_flame_graph_format("<root>", stacks, 0), max_nesting: false)
 
       # This html code is almost copied from d3-flame-graph sample code.
       # (Apache License 2.0)
