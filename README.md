@@ -1,6 +1,7 @@
 # Stackprof
 
 [![Build Status](https://travis-ci.org/tmm1/stackprof.svg?branch=master)](https://travis-ci.org/tmm1/stackprof)
+[![Gem Version](https://badge.fury.io/rb/stackprof.svg)](https://badge.fury.io/rb/stackprof)
 
 A sampling call-stack profiler for Ruby.
 
