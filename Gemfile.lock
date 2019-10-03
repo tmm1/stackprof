@@ -11,7 +11,7 @@ GEM
     mocha (0.14.0)
       metaclass (~> 0.0.1)
     rake (10.3.2)
-    rake-compiler (0.9.3)
+    rake-compiler (1.0.8)
       rake
 
 PLATFORMS
@@ -20,7 +20,7 @@ PLATFORMS
 DEPENDENCIES
   minitest (~> 5.0)
   mocha (~> 0.14)
-  rake-compiler (~> 0.9)
+  rake-compiler (~> 1.0)
   stackprof!
 
 BUNDLED WITH
