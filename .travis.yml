@@ -1,12 +1,22 @@
-dist: bionic
-language: ruby
-cache: bundler
-rvm:
-  # Possibly https://github.com/travis-ci/travis-ci/issues/2220
-  - 2.1.10
-  - 2.2
-  - 2.3
-  - 2.4
-  - 2.5
-  - 2.6
-  - ruby-head
+sudo: required
+
+services:
+  - docker
+
+language: general
+
+env:
+  matrix:
+    - RVM_RUBY_VERSION=2.1
+    - RVM_RUBY_VERSION=2.2
+    - RVM_RUBY_VERSION=2.3
+    - RVM_RUBY_VERSION=2.4
+    - RVM_RUBY_VERSION=2.5
+    - RVM_RUBY_VERSION=2.6
+    - RVM_RUBY_VERSION=ruby-head
+
+before_install:
+- sudo docker build -t stackprof-$RVM_RUBY_VERSION --build-arg=RVM_RUBY_VERSION=$RVM_RUBY_VERSION .
+
+script:
+- sudo docker run --name stackprof-$RVM_RUBY_VERSION stackprof-$RVM_RUBY_VERSION
