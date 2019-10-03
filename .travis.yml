@@ -11,6 +11,9 @@ rvm:
   - 2.6
   - ruby-head
 
+# This job will only appear as failed, once it has failed. The visual indication
+# is different when using build stages and jobs.
+# https://github.com/travis-ci/travis-ci/issues/7789
 matrix:
   allow_failures:
   # We build ruby-head using docker, but maybe this will start working again
