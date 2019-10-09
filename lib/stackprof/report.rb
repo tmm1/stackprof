@@ -73,15 +73,15 @@ module StackProf
       f.puts JSON.generate(@data, max_nesting: false)
     end
 
-    def print_stackcollapse
+    def print_stackcollapse(f=STDOUT)
       raise "profile does not include raw samples (add `raw: true` to collecting StackProf.run)" unless raw = data[:raw]
 
       while len = raw.shift
         frames = raw.slice!(0, len)
         weight = raw.shift
 
-        print frames.map{ |a| data[:frames][a][:name] }.join(';')
-        puts " #{weight}"
+        f.print frames.map{ |a| data[:frames][a][:name] }.join(';')
+        f.puts " #{weight}"
       end
     end
 
