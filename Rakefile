@@ -14,16 +14,11 @@ end
 # Ruby Extension
 # ==========================================================
 
-begin
-  require 'rake/extensiontask'
-  Rake::ExtensionTask.new('stackprof', GEMSPEC) do |ext|
-    ext.lib_dir = 'lib/stackprof'
-  end
-  task :build => :compile
-rescue LoadError => e
-  # rake-compiler not installed.  No problem if on CI.
-  raise e unless ENV["TRAVIS"]
+require 'rake/extensiontask'
+Rake::ExtensionTask.new('stackprof', GEMSPEC) do |ext|
+  ext.lib_dir = 'lib/stackprof'
 end
+task :build => :compile
 
 # ==========================================================
 # Testing

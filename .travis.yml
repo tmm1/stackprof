@@ -14,12 +14,8 @@ env:
     - RVM_RUBY_VERSION=2.6
     - RVM_RUBY_VERSION=ruby-head
 
-before_install:
-- sudo --help
-- sudo -i which ruby
-- sudo -i which rake
-- bundle install
-- rake --trace test:docker:$RVM_RUBY_VERSION:build
+after_install:
+- bundle exec rake test:docker:$RVM_RUBY_VERSION:build
 
 script:
-- rake --trace test:docker:$RVM_RUBY_VERSION
+- bundle exec rake test:docker:$RVM_RUBY_VERSION
