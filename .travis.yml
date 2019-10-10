@@ -15,7 +15,7 @@ env:
     - RVM_RUBY_VERSION=ruby-head
 
 before_install:
-- sudo -E rake test:docker:$RVM_RUBY_VERSION:build
+- sudo -E rake --trace test:docker:$RVM_RUBY_VERSION:build
 
 script:
-- sudo -E rake test:docker:$RVM_RUBY_VERSION
+- sudo -E rake --trace test:docker:$RVM_RUBY_VERSION
