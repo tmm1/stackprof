@@ -64,7 +64,7 @@ namespace :test do
     end
 
     task "ruby-head:build" do
-      run_tests_in_docker
+      build_ruby_docker_image
     end
 
     desc "Run tests in docker for ruby-head"
