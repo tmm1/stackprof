@@ -18,6 +18,7 @@ before_install:
 - sudo --help
 - sudo -i which ruby
 - sudo -i which rake
+- bundle install
 - rake --trace test:docker:$RVM_RUBY_VERSION:build
 
 script:
