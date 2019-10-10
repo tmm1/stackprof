@@ -18,4 +18,5 @@ ADD . /stackprof/
 WORKDIR /stackprof/
 RUN /bin/bash -l -c ". /etc/profile.d/rvm.sh && gem install bundler:1.16.0"
 RUN /bin/bash -l -c ". /etc/profile.d/rvm.sh && bundle install"
+RUN /bin/bash -l -c ". /etc/profile.d/rvm.sh && bundle exec rake build"
 CMD /bin/bash -l -c ". /etc/profile.d/rvm.sh && bundle exec rake"
