@@ -3,7 +3,7 @@ sudo: required
 services:
   - docker
 
-language: general
+language: ruby
 
 env:
   matrix:
@@ -15,7 +15,7 @@ env:
     - RVM_RUBY_VERSION=ruby-head
 
 before_install:
-- sudo docker build -t stackprof-$RVM_RUBY_VERSION --build-arg=RVM_RUBY_VERSION=$RVM_RUBY_VERSION .
+- sudo rake test:docker:$RVM_RUBY_VERSION:build
 
 script:
-- sudo docker run --name stackprof-$RVM_RUBY_VERSION stackprof-$RVM_RUBY_VERSION
+- sudo rake test:docker:$RVM_RUBY_VERSION
