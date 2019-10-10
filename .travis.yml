@@ -16,9 +16,9 @@ env:
 
 before_install:
 - sudo --help
-- sudo -E which ruby
-- sudo -E which rake
-- sudo -E rake --trace test:docker:$RVM_RUBY_VERSION:build
+- sudo -i which ruby
+- sudo -i which rake
+- sudo -i rake --trace test:docker:$RVM_RUBY_VERSION:build
 
 script:
-- sudo -E rake --trace test:docker:$RVM_RUBY_VERSION
+- sudo -i rake --trace test:docker:$RVM_RUBY_VERSION
