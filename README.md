@@ -329,7 +329,7 @@ Option      | Meaning
 `out`       | the target file, which will be overwritten
 `interval`  | mode-relative sample rate [c.f.](#sampling)
 `aggregate` | defaults: `true` - if `false` disables [aggregation](#aggregation)
-`raw`       | defaults `false` - if `true` collects the extra data required by the `--flamegraph` and `--stackcollapse` report types
+`raw`       | defaults `false` - if `true` collects the extra data required by the `--flamegraph` and `--stackcollapse` report types; also required for `--json` reports for some external viewers (e.g., [speedscope](https://www.speedscope.app))
 `save_every`| (rack middleware only) write the target file after this many requests
 
 ## Todo
