@@ -16,6 +16,7 @@
 #include <pthread.h>
 
 #define BUF_SIZE 2048
+#define MICROSECONDS_IN_SECOND 1000000
 
 typedef struct {
     size_t total_samples;
@@ -497,7 +498,7 @@ stackprof_record_sample()
 	struct timeval diff;
 	gettimeofday(&t, NULL);
 	timersub(&t, &_stackprof.last_sample_at, &diff);
-	timestamp_delta = (1000 * diff.tv_sec) + diff.tv_usec;
+	timestamp_delta = (MICROSECONDS_IN_SECOND * diff.tv_sec) + diff.tv_usec;
     }
     num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
     stackprof_record_sample_for_stack(num, timestamp_delta);
@@ -516,7 +517,7 @@ stackprof_record_gc_samples()
 
 	// We don't know when the GC samples were actually marked, so let's
 	// assume that they were marked at a perfectly regular interval.
-	delta_to_first_unrecorded_gc_sample = (1000 * diff.tv_sec + diff.tv_usec) - (_stackprof.unrecorded_gc_samples - 1) * NUM2LONG(_stackprof.interval);
+	delta_to_first_unrecorded_gc_sample = (MICROSECONDS_IN_SECOND * diff.tv_sec + diff.tv_usec) - (_stackprof.unrecorded_gc_samples - 1) * NUM2LONG(_stackprof.interval);
 	if (delta_to_first_unrecorded_gc_sample < 0) {
 	    delta_to_first_unrecorded_gc_sample = 0;
 	}
