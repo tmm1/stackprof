@@ -138,9 +138,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.interval = interval;
     _stackprof.out = out;
 
-    if (raw) {
-	gettimeofday(&_stackprof.last_sample_at, NULL);
-    }
+    gettimeofday(&_stackprof.last_sample_at, NULL);
 
     return Qtrue;
 }
@@ -500,11 +498,7 @@ stackprof_record_sample_for_stack(int frame_count, int timestamp_delta)
 	prev_frame = frame;
     }
 
-    gettimeofday(&sample_finish, NULL);
-
-    if (_stackprof.raw) {
-	_stackprof.last_sample_at = sample_finish;
-    }
+    gettimeofday(&_stackprof.last_sample_at, NULL);
 
     // [EXPERIMENTAL] Protect against individual samples taking longer to capture than the interval between samples,
     // which will cause the sampling to pile up infinitely, peg the CPU, and hang the program.
@@ -525,12 +519,13 @@ stackprof_record_sample()
 {
     int timestamp_delta = 0;
     int frame_count;
+    struct timeval t;
+    struct timeval time_since_last_sample;
+    gettimeofday(&t, NULL);
+    timersub(&t, &_stackprof.last_sample_at, &time_since_last_sample);
+
     if (_stackprof.raw) {
-	struct timeval t;
-	struct timeval diff;
-	gettimeofday(&t, NULL);
-	timersub(&t, &_stackprof.last_sample_at, &diff);
-	timestamp_delta = stackprof_timeval_to_usec(&diff);
+	timestamp_delta = stackprof_timeval_to_usec(&time_since_last_sample);
     }
     frame_count = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
     stackprof_record_sample_for_stack(frame_count, timestamp_delta);
@@ -541,12 +536,12 @@ stackprof_record_gc_samples()
 {
     int delta_to_first_unrecorded_gc_sample = 0;
     int i;
-    if (_stackprof.raw) {
-	struct timeval t;
-	struct timeval diff;
-	gettimeofday(&t, NULL);
-	timersub(&t, &_stackprof.last_sample_at, &diff);
+    struct timeval t;
+    struct timeval diff;
+    gettimeofday(&t, NULL);
+    timersub(&t, &_stackprof.last_sample_at, &diff);
 
+    if (_stackprof.raw) {
 	// We don't know when the GC samples were actually marked, so let's
 	// assume that they were marked at a perfectly regular interval.
 	delta_to_first_unrecorded_gc_sample = stackprof_timeval_to_usec(&diff) - (_stackprof.unrecorded_gc_samples - 1) * NUM2LONG(_stackprof.interval);
