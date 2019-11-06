@@ -33,6 +33,7 @@ static struct {
     VALUE mode;
     VALUE interval;
     VALUE out;
+    VALUE detect_hung;
 
     VALUE *raw_samples;
     size_t raw_samples_len;
@@ -60,6 +61,7 @@ static struct {
 static VALUE sym_object, sym_wall, sym_cpu, sym_custom, sym_name, sym_file, sym_line;
 static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_lines;
 static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_frames, sym_out, sym_aggregate, sym_raw_timestamp_deltas;
+static VALUE sym_detect_hung;
 static VALUE sym_gc_samples, objtracer;
 static VALUE gc_hook;
 static VALUE rb_mStackProf;
@@ -72,7 +74,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 {
     struct sigaction sa;
     struct itimerval timer;
-    VALUE opts = Qnil, mode = Qnil, interval = Qnil, out = Qfalse;
+    VALUE opts = Qnil, mode = Qnil, interval = Qnil, out = Qfalse, detect_hung = Qfalse;
     int raw = 0, aggregate = 1;
 
     if (_stackprof.running)
@@ -84,6 +86,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	mode = rb_hash_aref(opts, sym_mode);
 	interval = rb_hash_aref(opts, sym_interval);
 	out = rb_hash_aref(opts, sym_out);
+	detect_hung = rb_hash_aref(opts, sym_detect_hung);
 
 	if (RTEST(rb_hash_aref(opts, sym_raw)))
 	    raw = 1;
@@ -98,6 +101,11 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	_stackprof.overall_samples = 0;
 	_stackprof.during_gc = 0;
     }
+
+    if (detect_hung == Qtrue && mode != sym_wall) {
+        rb_raise(rb_eNotImpError, "`detect_hung` is only implemented for `wall` mode (EXPERIMENTAL)");
+    }
+    _stackprof.detect_hung = detect_hung;
 
     if (mode == sym_object) {
 	if (!RTEST(interval)) interval = INT2FIX(1);
@@ -383,6 +391,11 @@ stackprof_record_sample_for_stack(int num, int timestamp_delta)
     int i, n;
     VALUE prev_frame = Qnil;
 
+    struct timeval sample_start, sample_finish;
+    struct timeval sample_duration_tdif;
+    int sample_duration_usec;
+    gettimeofday(&sample_start, NULL);
+
     _stackprof.overall_samples++;
 
     if (_stackprof.raw) {
@@ -482,8 +495,23 @@ stackprof_record_sample_for_stack(int num, int timestamp_delta)
 	prev_frame = frame;
     }
 
+    gettimeofday(&sample_finish, NULL);
+
     if (_stackprof.raw) {
-	gettimeofday(&_stackprof.last_sample_at, NULL);
+	_stackprof.last_sample_at = sample_finish;
+    }
+
+    // [EXPERIMENTAL] Protect against individual samples taking longer to capture than the interval between samples,
+    // which will cause the sampling to pile up infinitely, peg the CPU, and hang the program.
+    if (RTEST(_stackprof.detect_hung)) {
+        timersub(&sample_finish, &sample_start, &sample_duration_tdif);
+        sample_duration_usec = stackprof_timeval_to_usec(&sample_duration_tdif);
+        if (sample_duration_usec >= FIX2INT(_stackprof.interval)) {
+            fprintf(stderr, "\nUH OH TOO LONG: %d with interval %d\n", sample_duration_usec, FIX2INT(_stackprof.interval));
+
+            // TODO insert some kind of fake frame?
+            // or skip next frame?
+        }
     }
 }
 
@@ -497,7 +525,7 @@ stackprof_record_sample()
 	struct timeval diff;
 	gettimeofday(&t, NULL);
 	timersub(&t, &_stackprof.last_sample_at, &diff);
-	timestamp_delta = (1000 * diff.tv_sec) + diff.tv_usec;
+	timestamp_delta = stackprof_timeval_to_usec(&diff);
     }
     num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
     stackprof_record_sample_for_stack(num, timestamp_delta);
@@ -516,7 +544,7 @@ stackprof_record_gc_samples()
 
 	// We don't know when the GC samples were actually marked, so let's
 	// assume that they were marked at a perfectly regular interval.
-	delta_to_first_unrecorded_gc_sample = (1000 * diff.tv_sec + diff.tv_usec) - (_stackprof.unrecorded_gc_samples - 1) * NUM2LONG(_stackprof.interval);
+	delta_to_first_unrecorded_gc_sample = stackprof_timeval_to_usec(&diff) - (_stackprof.unrecorded_gc_samples - 1) * NUM2LONG(_stackprof.interval);
 	if (delta_to_first_unrecorded_gc_sample < 0) {
 	    delta_to_first_unrecorded_gc_sample = 0;
 	}
@@ -639,6 +667,11 @@ stackprof_atfork_child(void)
     stackprof_stop(rb_mStackProf);
 }
 
+int
+stackprof_timeval_to_usec(struct timeval *diff) {
+    return MICROSECONDS_IN_SECOND * diff->tv_sec + diff->tv_usec;
+}
+
 void
 Init_stackprof(void)
 {
@@ -664,6 +697,7 @@ Init_stackprof(void)
     S(out);
     S(frames);
     S(aggregate);
+    S(detect_hung);
 #undef S
 
     gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, &_stackprof);
@@ -677,6 +711,8 @@ Init_stackprof(void)
     _stackprof.raw_timestamp_deltas = NULL;
     _stackprof.raw_timestamp_deltas_len = 0;
     _stackprof.raw_timestamp_deltas_capa = 0;
+
+    // TODO(benbuckman) can we do a similar fake frame when sampling rate is too fast?
 
     _stackprof.fake_gc_frame = INT2FIX(0x9C);
     _stackprof.empty_string = rb_str_new_cstr("");
