@@ -385,6 +385,11 @@ st_numtable_increment(st_table *table, st_data_t key, size_t increment)
     st_update(table, key, numtable_increment_callback, (st_data_t)increment);
 }
 
+/*
+    Records information about the frames captured in `_stackprof.frames_buffer`,
+    up to `frame_count-1` (buffer may contain more frames from prior sample),
+    captured `timestamp_delta` microseconds after previous sample.
+*/
 void
 stackprof_record_sample_for_stack(int frame_count, int timestamp_delta)
 {
