@@ -34,7 +34,7 @@ static struct {
     VALUE mode;
     VALUE interval;
     VALUE out;
-    VALUE detect_hung;
+    VALUE debug;
 
     VALUE *raw_samples;
     size_t raw_samples_len;
@@ -63,7 +63,7 @@ static struct {
 static VALUE sym_object, sym_wall, sym_cpu, sym_custom, sym_name, sym_file, sym_line;
 static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_lines;
 static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_frames, sym_out, sym_aggregate, sym_raw_timestamp_deltas;
-static VALUE sym_detect_hung;
+static VALUE sym_debug;
 static VALUE sym_gc_samples, objtracer;
 static VALUE gc_hook;
 static VALUE rb_mStackProf;
@@ -78,7 +78,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 {
     struct sigaction sa;
     struct itimerval timer;
-    VALUE opts = Qnil, mode = Qnil, interval = Qnil, out = Qfalse, detect_hung = Qfalse;
+    VALUE opts = Qnil, mode = Qnil, interval = Qnil, out = Qfalse, debug = Qfalse;
     int raw = 0, aggregate = 1;
 
     if (_stackprof.running)
@@ -90,13 +90,15 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	mode = rb_hash_aref(opts, sym_mode);
 	interval = rb_hash_aref(opts, sym_interval);
 	out = rb_hash_aref(opts, sym_out);
-	detect_hung = rb_hash_aref(opts, sym_detect_hung);
+	debug = rb_hash_aref(opts, sym_debug);
 
 	if (RTEST(rb_hash_aref(opts, sym_raw)))
 	    raw = 1;
 	if (rb_hash_lookup2(opts, sym_aggregate, Qundef) == Qfalse)
 	    aggregate = 0;
     }
+    _stackprof.debug = RTEST(debug);
+
     if (!RTEST(mode)) mode = sym_wall;
 
     if (!_stackprof.frames) {
@@ -105,11 +107,6 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	_stackprof.overall_samples = 0;
 	_stackprof.during_gc = 0;
     }
-
-    if (detect_hung == Qtrue && mode != sym_wall) {
-        rb_raise(rb_eNotImpError, "`detect_hung` is only implemented for `wall` mode (EXPERIMENTAL)");
-    }
-    _stackprof.detect_hung = detect_hung;
 
     if (mode == sym_object) {
 	if (!RTEST(interval)) interval = INT2FIX(1);
@@ -511,12 +508,14 @@ stackprof_record_sample()
 
     gettimeofday(&sampling_start, NULL);
     long int time_since_last_sample_usec = diff_timevals_usec(&_stackprof.last_sample_at, &sampling_start);
-    long int time_since_start_usec = diff_timevals_usec(&_stackprof.started_at, &sampling_start);
 
-    fprintf(stderr, "timestamp delta %ld usec since last, %ld since start, with interval %ld\n",
-        time_since_last_sample_usec,
-        time_since_start_usec,
-        NUM2LONG(_stackprof.interval));
+    if (_stackprof.debug) {
+        long int time_since_start_usec = diff_timevals_usec(&_stackprof.started_at, &sampling_start);
+        printf("timestamp delta %ld usec since last, %ld since start, with interval %ld\n",
+            time_since_last_sample_usec,
+            time_since_start_usec,
+            NUM2LONG(_stackprof.interval));
+    }
 
     frame_count = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
 
@@ -525,19 +524,16 @@ stackprof_record_sample()
     gettimeofday(&sampling_finish, NULL);
     _stackprof.last_sample_at = sampling_finish;
 
-    // [EXPERIMENTAL] Protect against individual samples taking longer to capture than the interval between samples,
-    // which will cause the sampling to pile up infinitely, peg the CPU, and hang the program.
-    if (RTEST(_stackprof.detect_hung)) {
+    if (_stackprof.debug) {
         long int sampling_duration_usec = diff_timevals_usec(&sampling_start, &sampling_finish);
-        fprintf(stderr, "duration of stackprof_record_sample: %ld usec with interval %d\n",
+        printf("duration of stackprof_record_sample: %ld usec with interval %d\n",
             sampling_duration_usec,
             NUM2LONG(_stackprof.interval));
 
         if (sampling_duration_usec >= NUM2LONG(_stackprof.interval)) {
-            fprintf(stderr, "\nUH OH TOO LONG: %d with interval %d\n", sampling_duration_usec, NUM2LONG(_stackprof.interval));
-
-            // TODO insert some kind of fake frame?
-            // or skip next frame?
+            fprintf(stderr, "INTERVAL IS TOO FAST: %d with interval %d\n",
+                sampling_duration_usec,
+                NUM2LONG(_stackprof.interval));
         }
     }
 }
@@ -599,8 +595,12 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 {
     _stackprof.overall_signals++;
 
+    // Protect against individual samples taking longer to capture than
+    // the interval between samples, which would cause the job queue
+    // to pile up faster than it's flushed, peg the CPU, and hang the program.
     if (_stackprof.in_signal_handler) {
-        fprintf(stderr, "skip stackprof_signal_handler, already in handler\n");
+        if (_stackprof.debug)
+            fprintf(stderr, "skip stackprof_signal_handler, already in handler!\n");
         return;
     }
 
@@ -723,7 +723,7 @@ Init_stackprof(void)
     S(out);
     S(frames);
     S(aggregate);
-    S(detect_hung);
+    S(debug);
 #undef S
 
     gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, &_stackprof);
@@ -737,8 +737,6 @@ Init_stackprof(void)
     _stackprof.raw_timestamp_deltas = NULL;
     _stackprof.raw_timestamp_deltas_len = 0;
     _stackprof.raw_timestamp_deltas_capa = 0;
-
-    // TODO(benbuckman) can we do a similar fake frame when sampling rate is too fast?
 
     _stackprof.fake_gc_frame = INT2FIX(0x9C);
     _stackprof.empty_string = rb_str_new_cstr("");
