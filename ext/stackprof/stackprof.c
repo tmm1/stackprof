@@ -68,6 +68,8 @@ static VALUE rb_mStackProf;
 
 static void stackprof_newobj_handler(VALUE, void*);
 static void stackprof_signal_handler(int sig, siginfo_t* sinfo, void* ucontext);
+long int timeval_to_usec(struct timeval *diff);
+long int diff_timevals_usec(struct timeval *start, struct timeval *end);
 
 static VALUE
 stackprof_start(int argc, VALUE *argv, VALUE self)
@@ -394,11 +396,6 @@ stackprof_record_sample_for_stack(int frame_count, int timestamp_delta)
     int i, n;
     VALUE prev_frame = Qnil;
 
-    struct timeval sample_start, sample_finish;
-    struct timeval sample_duration_tdif;
-    int sample_duration_usec;
-    gettimeofday(&sample_start, NULL);
-
     _stackprof.overall_samples++;
 
     if (_stackprof.raw) {
@@ -499,36 +496,38 @@ stackprof_record_sample_for_stack(int frame_count, int timestamp_delta)
     }
 
     gettimeofday(&_stackprof.last_sample_at, NULL);
-
-    // [EXPERIMENTAL] Protect against individual samples taking longer to capture than the interval between samples,
-    // which will cause the sampling to pile up infinitely, peg the CPU, and hang the program.
-    if (RTEST(_stackprof.detect_hung)) {
-        timersub(&sample_finish, &sample_start, &sample_duration_tdif);
-        sample_duration_usec = stackprof_timeval_to_usec(&sample_duration_tdif);
-        if (sample_duration_usec >= FIX2INT(_stackprof.interval)) {
-            fprintf(stderr, "\nUH OH TOO LONG: %d with interval %d\n", sample_duration_usec, FIX2INT(_stackprof.interval));
-
-            // TODO insert some kind of fake frame?
-            // or skip next frame?
-        }
-    }
 }
 
 void
 stackprof_record_sample()
 {
-    int timestamp_delta = 0;
     int frame_count;
-    struct timeval t;
-    struct timeval time_since_last_sample;
-    gettimeofday(&t, NULL);
-    timersub(&t, &_stackprof.last_sample_at, &time_since_last_sample);
+    struct timeval sampling_start, sampling_finish;
 
-    if (_stackprof.raw) {
-	timestamp_delta = stackprof_timeval_to_usec(&time_since_last_sample);
-    }
+    gettimeofday(&sampling_start, NULL);
+    long int time_since_last_sample_usec = diff_timevals_usec(&_stackprof.last_sample_at, &sampling_start);
+
+    fprintf(stderr, "timestamp delta %ld usec since last with interval %ld\n", time_since_last_sample_usec, NUM2LONG(_stackprof.interval));
+
     frame_count = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
-    stackprof_record_sample_for_stack(frame_count, timestamp_delta);
+
+    stackprof_record_sample_for_stack(frame_count, time_since_last_sample_usec);
+
+    gettimeofday(&sampling_finish, NULL);
+    _stackprof.last_sample_at = sampling_finish;
+
+    // [EXPERIMENTAL] Protect against individual samples taking longer to capture than the interval between samples,
+    // which will cause the sampling to pile up infinitely, peg the CPU, and hang the program.
+    if (RTEST(_stackprof.detect_hung)) {
+        long int sampling_duration_usec = diff_timevals_usec(&sampling_start, &sampling_finish);
+        fprintf(stderr, "CHECK: time to stackprof_record_sample_for_stack: %ld usec\n", sampling_duration_usec);
+        if (sampling_duration_usec >= NUM2LONG(_stackprof.interval)) {
+            fprintf(stderr, "\nUH OH TOO LONG: %d with interval %d\n", sampling_duration_usec, NUM2LONG(_stackprof.interval));
+
+            // TODO insert some kind of fake frame?
+            // or skip next frame?
+        }
+    }
 }
 
 void
@@ -544,7 +543,7 @@ stackprof_record_gc_samples()
     if (_stackprof.raw) {
 	// We don't know when the GC samples were actually marked, so let's
 	// assume that they were marked at a perfectly regular interval.
-	delta_to_first_unrecorded_gc_sample = stackprof_timeval_to_usec(&diff) - (_stackprof.unrecorded_gc_samples - 1) * NUM2LONG(_stackprof.interval);
+	delta_to_first_unrecorded_gc_sample = timeval_to_usec(&diff) - (_stackprof.unrecorded_gc_samples - 1) * NUM2LONG(_stackprof.interval);
 	if (delta_to_first_unrecorded_gc_sample < 0) {
 	    delta_to_first_unrecorded_gc_sample = 0;
 	}
@@ -667,9 +666,20 @@ stackprof_atfork_child(void)
     stackprof_stop(rb_mStackProf);
 }
 
-int
-stackprof_timeval_to_usec(struct timeval *diff) {
+long int timeval_to_usec(struct timeval *diff) {
     return MICROSECONDS_IN_SECOND * diff->tv_sec + diff->tv_usec;
+}
+
+long int diff_timevals_usec(struct timeval *start, struct timeval *end) {
+    struct timeval diff;
+    if ((end->tv_usec - start->tv_usec) < 0) {
+        diff.tv_sec = end->tv_sec - start->tv_sec - 1;
+        diff.tv_usec = MICROSECONDS_IN_SECOND + end->tv_usec - start->tv_usec;
+    } else {
+        diff.tv_sec = end->tv_sec - start->tv_sec;
+        diff.tv_usec = end->tv_usec - start->tv_usec;
+    }
+    return timeval_to_usec(&diff);
 }
 
 void
