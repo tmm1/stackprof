@@ -29,6 +29,7 @@ static struct {
     int running;
     int raw;
     int aggregate;
+    int in_signal_handler;
 
     VALUE mode;
     VALUE interval;
@@ -40,6 +41,7 @@ static struct {
     size_t raw_samples_capa;
     size_t raw_sample_index;
 
+    struct timeval started_at;
     struct timeval last_sample_at;
     int *raw_timestamp_deltas;
     size_t raw_timestamp_deltas_len;
@@ -139,8 +141,10 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.mode = mode;
     _stackprof.interval = interval;
     _stackprof.out = out;
+    _stackprof.in_signal_handler = 0;
 
-    gettimeofday(&_stackprof.last_sample_at, NULL);
+    gettimeofday(&_stackprof.started_at, NULL);
+    _stackprof.last_sample_at = _stackprof.started_at;
 
     return Qtrue;
 }
@@ -165,6 +169,7 @@ stackprof_stop(VALUE self)
 	sa.sa_flags = SA_RESTART;
 	sigemptyset(&sa.sa_mask);
 	sigaction(_stackprof.mode == sym_wall ? SIGALRM : SIGPROF, &sa, NULL);
+        _stackprof.in_signal_handler = 0;
     } else if (_stackprof.mode == sym_custom) {
 	/* sampled manually */
     } else {
@@ -506,8 +511,12 @@ stackprof_record_sample()
 
     gettimeofday(&sampling_start, NULL);
     long int time_since_last_sample_usec = diff_timevals_usec(&_stackprof.last_sample_at, &sampling_start);
+    long int time_since_start_usec = diff_timevals_usec(&_stackprof.started_at, &sampling_start);
 
-    fprintf(stderr, "timestamp delta %ld usec since last with interval %ld\n", time_since_last_sample_usec, NUM2LONG(_stackprof.interval));
+    fprintf(stderr, "timestamp delta %ld usec since last, %ld since start, with interval %ld\n",
+        time_since_last_sample_usec,
+        time_since_start_usec,
+        NUM2LONG(_stackprof.interval));
 
     frame_count = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
 
@@ -520,7 +529,10 @@ stackprof_record_sample()
     // which will cause the sampling to pile up infinitely, peg the CPU, and hang the program.
     if (RTEST(_stackprof.detect_hung)) {
         long int sampling_duration_usec = diff_timevals_usec(&sampling_start, &sampling_finish);
-        fprintf(stderr, "CHECK: time to stackprof_record_sample_for_stack: %ld usec\n", sampling_duration_usec);
+        fprintf(stderr, "duration of stackprof_record_sample: %ld usec with interval %d\n",
+            sampling_duration_usec,
+            NUM2LONG(_stackprof.interval));
+
         if (sampling_duration_usec >= NUM2LONG(_stackprof.interval)) {
             fprintf(stderr, "\nUH OH TOO LONG: %d with interval %d\n", sampling_duration_usec, NUM2LONG(_stackprof.interval));
 
@@ -563,31 +575,35 @@ stackprof_record_gc_samples()
 static void
 stackprof_gc_job_handler(void *data)
 {
-    static int in_signal_handler = 0;
-    if (in_signal_handler) return;
+    if (_stackprof.in_signal_handler) return;
     if (!_stackprof.running) return;
 
-    in_signal_handler++;
+    _stackprof.in_signal_handler++;
     stackprof_record_gc_samples();
-    in_signal_handler--;
+    _stackprof.in_signal_handler--;
 }
 
 static void
 stackprof_job_handler(void *data)
 {
-    static int in_signal_handler = 0;
-    if (in_signal_handler) return;
+    if (_stackprof.in_signal_handler) return;
     if (!_stackprof.running) return;
 
-    in_signal_handler++;
+    _stackprof.in_signal_handler++;
     stackprof_record_sample();
-    in_signal_handler--;
+    _stackprof.in_signal_handler--;
 }
 
 static void
 stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 {
     _stackprof.overall_signals++;
+
+    if (_stackprof.in_signal_handler) {
+        fprintf(stderr, "skip stackprof_signal_handler, already in handler\n");
+        return;
+    }
+
     if (rb_during_gc()) {
 	_stackprof.unrecorded_gc_samples++;
 	rb_postponed_job_register_one(0, stackprof_gc_job_handler, (void*)0);
