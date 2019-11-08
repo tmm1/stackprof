@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <sys/time.h>
 #include <pthread.h>
+#include <stdint.h>
 
 #define BUF_SIZE 2048
 
@@ -70,8 +71,8 @@ static VALUE rb_mStackProf;
 
 static void stackprof_newobj_handler(VALUE, void*);
 static void stackprof_signal_handler(int sig, siginfo_t* sinfo, void* ucontext);
-long int timeval_to_usec(struct timeval *diff);
-long int diff_timevals_usec(struct timeval *start, struct timeval *end);
+int64_t timeval_to_usec(struct timeval *diff);
+int64_t diff_timevals_usec(struct timeval *start, struct timeval *end);
 
 static VALUE
 stackprof_start(int argc, VALUE *argv, VALUE self)
@@ -507,10 +508,10 @@ stackprof_record_sample()
     struct timeval sampling_start, sampling_finish;
 
     gettimeofday(&sampling_start, NULL);
-    long int time_since_last_sample_usec = diff_timevals_usec(&_stackprof.last_sample_at, &sampling_start);
+    int64_t time_since_last_sample_usec = diff_timevals_usec(&_stackprof.last_sample_at, &sampling_start);
 
     if (_stackprof.debug) {
-        long int time_since_start_usec = diff_timevals_usec(&_stackprof.started_at, &sampling_start);
+        int64_t time_since_start_usec = diff_timevals_usec(&_stackprof.started_at, &sampling_start);
         printf("timestamp delta %ld usec since last, %ld since start, with interval %ld\n",
             time_since_last_sample_usec,
             time_since_start_usec,
@@ -525,7 +526,7 @@ stackprof_record_sample()
     _stackprof.last_sample_at = sampling_finish;
 
     if (_stackprof.debug) {
-        long int sampling_duration_usec = diff_timevals_usec(&sampling_start, &sampling_finish);
+        int64_t sampling_duration_usec = diff_timevals_usec(&sampling_start, &sampling_finish);
         printf("duration of stackprof_record_sample: %ld usec with interval %d\n",
             sampling_duration_usec,
             NUM2LONG(_stackprof.interval));
@@ -682,11 +683,11 @@ stackprof_atfork_child(void)
     stackprof_stop(rb_mStackProf);
 }
 
-long int timeval_to_usec(struct timeval *diff) {
+int64_t timeval_to_usec(struct timeval *diff) {
     return MICROSECONDS_IN_SECOND * diff->tv_sec + diff->tv_usec;
 }
 
-long int diff_timevals_usec(struct timeval *start, struct timeval *end) {
+int64_t diff_timevals_usec(struct timeval *start, struct timeval *end) {
     struct timeval diff;
     if ((end->tv_usec - start->tv_usec) < 0) {
         diff.tv_sec = end->tv_sec - start->tv_sec - 1;
