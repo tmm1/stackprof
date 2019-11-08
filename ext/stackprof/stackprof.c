@@ -17,6 +17,7 @@
 #include <stdint.h>
 
 #define BUF_SIZE 2048
+#define MICROSECONDS_IN_SECOND 1000000
 
 typedef struct {
     size_t total_samples;
