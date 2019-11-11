@@ -546,7 +546,7 @@ void
 stackprof_record_gc_samples()
 {
     int64_t delta_to_first_unrecorded_gc_sample = 0;
-    int i;
+    unsigned long i;
     struct timeval t;
     struct timeval diff;
     gettimeofday(&t, NULL);
@@ -565,7 +565,7 @@ stackprof_record_gc_samples()
     _stackprof.lines_buffer[0] = 0;
 
     for (i = 0; i < _stackprof.unrecorded_gc_samples; i++) {
-	int timestamp_delta = i == 0 ? delta_to_first_unrecorded_gc_sample : NUM2INT(_stackprof.interval);
+	int64_t timestamp_delta = i == 0 ? delta_to_first_unrecorded_gc_sample : NUM2INT(_stackprof.interval);
 	stackprof_record_sample_for_stack(1, timestamp_delta);
     }
     _stackprof.during_gc += _stackprof.unrecorded_gc_samples;
