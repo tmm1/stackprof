@@ -45,7 +45,7 @@ static struct {
 
     struct timeval started_at;
     struct timeval last_sample_at;
-    int *raw_timestamp_deltas;
+    int64_t *raw_timestamp_deltas;
     size_t raw_timestamp_deltas_len;
     size_t raw_timestamp_deltas_capa;
 
@@ -309,7 +309,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 	raw_timestamp_deltas = rb_ary_new_capa(_stackprof.raw_timestamp_deltas_len);
 
 	for (n = 0; n < _stackprof.raw_timestamp_deltas_len; n++) {
-	    rb_ary_push(raw_timestamp_deltas, INT2FIX(_stackprof.raw_timestamp_deltas[n]));
+	    rb_ary_push(raw_timestamp_deltas, LL2NUM(_stackprof.raw_timestamp_deltas[n]));
 	}
 
 	free(_stackprof.raw_timestamp_deltas);
@@ -462,14 +462,14 @@ stackprof_record_sample_for_stack(int frame_count, int64_t timestamp_delta)
 	/* If there's no timestamp delta buffer, allocate one */
 	if (!_stackprof.raw_timestamp_deltas) {
 	    _stackprof.raw_timestamp_deltas_capa = 100;
-	    _stackprof.raw_timestamp_deltas = malloc(sizeof(int) * _stackprof.raw_timestamp_deltas_capa);
+	    _stackprof.raw_timestamp_deltas = malloc(sizeof(int64_t) * _stackprof.raw_timestamp_deltas_capa);
 	    _stackprof.raw_timestamp_deltas_len = 0;
 	}
 
 	/* Double the buffer size if it's too small */
 	while (_stackprof.raw_timestamp_deltas_capa <= _stackprof.raw_timestamp_deltas_len + 1) {
 	    _stackprof.raw_timestamp_deltas_capa *= 2;
-	    _stackprof.raw_timestamp_deltas = realloc(_stackprof.raw_timestamp_deltas, sizeof(int) * _stackprof.raw_timestamp_deltas_capa);
+	    _stackprof.raw_timestamp_deltas = realloc(_stackprof.raw_timestamp_deltas, sizeof(int64_t) * _stackprof.raw_timestamp_deltas_capa);
 	}
 
 	/* Store the time delta (which is the amount of time between samples) */
