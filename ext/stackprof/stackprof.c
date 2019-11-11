@@ -103,11 +103,13 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 
     if (!RTEST(mode)) mode = sym_wall;
 
+    // profiling can be paused and resumed, so allow for existing frames
     if (!_stackprof.frames) {
 	_stackprof.frames = st_init_numtable();
 	_stackprof.overall_signals = 0;
 	_stackprof.overall_samples = 0;
 	_stackprof.during_gc = 0;
+        _stackprof.in_signal_handler = 0;
     }
 
     if (mode == sym_object) {
@@ -140,7 +142,6 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.mode = mode;
     _stackprof.interval = interval;
     _stackprof.out = out;
-    _stackprof.in_signal_handler = 0;
 
     gettimeofday(&_stackprof.started_at, NULL);
     _stackprof.last_sample_at = _stackprof.started_at;
