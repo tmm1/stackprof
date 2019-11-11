@@ -132,11 +132,6 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	timer.it_interval.tv_usec = NUM2INT(interval);
 	timer.it_value = timer.it_interval;
 	setitimer(mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
-
-        if (_stackprof.debug) {
-            printf("started with interval %d (%ld sec %d usec)\n",
-                NUM2INT(interval), timer.it_interval.tv_sec, timer.it_interval.tv_usec);
-        }
     } else if (mode == sym_custom) {
 	/* sampled manually */
 	interval = Qnil;
@@ -150,6 +145,11 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.mode = mode;
     _stackprof.interval = interval;
     _stackprof.out = out;
+
+    if (_stackprof.debug) {
+        printf("started with interval %d (%ld sec %d usec)\n",
+            NUM2INT(_stackprof.interval), timer.it_interval.tv_sec, timer.it_interval.tv_usec);
+    }
 
     return Qtrue;
 }
