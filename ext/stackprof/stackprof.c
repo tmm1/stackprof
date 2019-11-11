@@ -109,7 +109,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	_stackprof.overall_signals = 0;
 	_stackprof.overall_samples = 0;
 	_stackprof.during_gc = 0;
-        _stackprof.in_signal_handler = 0;
+	_stackprof.in_signal_handler = 0;
     }
 
     if (mode == sym_object) {
@@ -169,7 +169,7 @@ stackprof_stop(VALUE self)
 	sa.sa_flags = SA_RESTART;
 	sigemptyset(&sa.sa_mask);
 	sigaction(_stackprof.mode == sym_wall ? SIGALRM : SIGPROF, &sa, NULL);
-        _stackprof.in_signal_handler = 0;
+	_stackprof.in_signal_handler = 0;
     } else if (_stackprof.mode == sym_custom) {
 	/* sampled manually */
     } else {
