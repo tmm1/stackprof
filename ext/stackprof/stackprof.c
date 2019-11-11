@@ -45,7 +45,7 @@ static struct {
 
     struct timeval started_at;
     struct timeval last_sample_at;
-    int64_t *raw_timestamp_deltas;
+    int *raw_timestamp_deltas;
     size_t raw_timestamp_deltas_len;
     size_t raw_timestamp_deltas_capa;
 
@@ -129,14 +129,9 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	sigaction(mode == sym_wall ? SIGALRM : SIGPROF, &sa, NULL);
 
 	timer.it_interval.tv_sec = 0;
-	timer.it_interval.tv_usec = NUM2INT(interval);
+	timer.it_interval.tv_usec = NUM2LONG(interval);
 	timer.it_value = timer.it_interval;
 	setitimer(mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
-
-        if (_stackprof.debug) {
-            printf("started with interval %d (%ld sec %d usec)\n",
-                NUM2INT(interval), timer.it_interval.tv_sec, timer.it_interval.tv_usec);
-        }
     } else if (mode == sym_custom) {
 	/* sampled manually */
 	interval = Qnil;
@@ -401,7 +396,7 @@ st_numtable_increment(st_table *table, st_data_t key, size_t increment)
     captured `timestamp_delta` microseconds after previous sample.
 */
 void
-stackprof_record_sample_for_stack(int frame_count, int64_t timestamp_delta)
+stackprof_record_sample_for_stack(int frame_count, int timestamp_delta)
 {
     int i, n;
     VALUE prev_frame = Qnil;
@@ -519,8 +514,10 @@ stackprof_record_sample()
 
     if (_stackprof.debug) {
         int64_t time_since_start_usec = diff_timevals_usec(&_stackprof.started_at, &sampling_start);
-        printf("timestamp delta %lld usec since last, %lld since start, with interval %d\n",
-            time_since_last_sample_usec, time_since_start_usec, NUM2INT(_stackprof.interval));
+        printf("timestamp delta %ld usec since last, %ld since start, with interval %ld\n",
+            time_since_last_sample_usec,
+            time_since_start_usec,
+            NUM2LONG(_stackprof.interval));
     }
 
     frame_count = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
@@ -534,11 +531,12 @@ stackprof_record_sample()
         int64_t sampling_duration_usec = diff_timevals_usec(&sampling_start, &sampling_finish);
         printf("duration of stackprof_record_sample: %ld usec with interval %d\n",
             sampling_duration_usec,
-            NUM2INT(_stackprof.interval));
+            NUM2LONG(_stackprof.interval));
 
-        if (sampling_duration_usec >= NUM2INT(_stackprof.interval)) {
+        if (sampling_duration_usec >= NUM2LONG(_stackprof.interval)) {
             fprintf(stderr, "INTERVAL IS TOO FAST: %d with interval %d\n",
-                sampling_duration_usec, NUM2INT(_stackprof.interval));
+                sampling_duration_usec,
+                NUM2LONG(_stackprof.interval));
         }
     }
 }
@@ -546,7 +544,7 @@ stackprof_record_sample()
 void
 stackprof_record_gc_samples()
 {
-    int64_t delta_to_first_unrecorded_gc_sample = 0;
+    int delta_to_first_unrecorded_gc_sample = 0;
     int i;
     struct timeval t;
     struct timeval diff;
@@ -556,7 +554,7 @@ stackprof_record_gc_samples()
     if (_stackprof.raw) {
 	// We don't know when the GC samples were actually marked, so let's
 	// assume that they were marked at a perfectly regular interval.
-	delta_to_first_unrecorded_gc_sample = timeval_to_usec(&diff) - (_stackprof.unrecorded_gc_samples - 1) * NUM2INT(_stackprof.interval);
+	delta_to_first_unrecorded_gc_sample = timeval_to_usec(&diff) - (_stackprof.unrecorded_gc_samples - 1) * NUM2LONG(_stackprof.interval);
 	if (delta_to_first_unrecorded_gc_sample < 0) {
 	    delta_to_first_unrecorded_gc_sample = 0;
 	}
@@ -566,7 +564,7 @@ stackprof_record_gc_samples()
     _stackprof.lines_buffer[0] = 0;
 
     for (i = 0; i < _stackprof.unrecorded_gc_samples; i++) {
-	int64_t timestamp_delta = i == 0 ? delta_to_first_unrecorded_gc_sample : NUM2INT(_stackprof.interval);
+	int timestamp_delta = i == 0 ? delta_to_first_unrecorded_gc_sample : NUM2LONG(_stackprof.interval);
 	stackprof_record_sample_for_stack(1, timestamp_delta);
     }
     _stackprof.during_gc += _stackprof.unrecorded_gc_samples;
@@ -621,7 +619,7 @@ static void
 stackprof_newobj_handler(VALUE tpval, void *data)
 {
     _stackprof.overall_signals++;
-    if (RTEST(_stackprof.interval) && _stackprof.overall_signals % NUM2INT(_stackprof.interval))
+    if (RTEST(_stackprof.interval) && _stackprof.overall_signals % NUM2LONG(_stackprof.interval))
 	return;
     stackprof_job_handler(0);
 }
@@ -673,9 +671,8 @@ stackprof_atfork_parent(void)
     struct itimerval timer;
     if (_stackprof.running) {
 	if (_stackprof.mode == sym_wall || _stackprof.mode == sym_cpu) {
-	    // TODO what if interval > 1 sec ??
 	    timer.it_interval.tv_sec = 0;
-	    timer.it_interval.tv_usec = NUM2INT(_stackprof.interval);
+	    timer.it_interval.tv_usec = NUM2LONG(_stackprof.interval);
 	    timer.it_value = timer.it_interval;
 	    setitimer(_stackprof.mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
 	}
