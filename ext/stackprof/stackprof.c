@@ -86,6 +86,8 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     if (_stackprof.running)
 	return Qfalse;
 
+    gettimeofday(&_stackprof.started_at, NULL);
+
     rb_scan_args(argc, argv, "0:", &opts);
 
     if (RTEST(opts)) {
@@ -110,6 +112,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	_stackprof.overall_samples = 0;
 	_stackprof.during_gc = 0;
 	_stackprof.in_signal_handler = 0;
+	_stackprof.last_sample_at = _stackprof.started_at;
     }
 
     if (mode == sym_object) {
@@ -142,9 +145,6 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.mode = mode;
     _stackprof.interval = interval;
     _stackprof.out = out;
-
-    gettimeofday(&_stackprof.started_at, NULL);
-    _stackprof.last_sample_at = _stackprof.started_at;
 
     return Qtrue;
 }
