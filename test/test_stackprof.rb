@@ -196,13 +196,13 @@ class StackProfTest < MiniTest::Test
   end
 
   def test_wall_too_fast_no_hang
-    # The stack of `recurse` takes longer than 1μs to sample
+    # The stack of `recurse` takes longer than 10μs to sample
     # (probabilistically on a current CPU),
     # so if this was not handled properly, the job queue would pile up
     # faster than it was flushed, and the program would hang.
     # Timeout ensures that if this is broken, the test itself does not hang.
     results = Timeout.timeout(10) do
-      StackProf.run(mode: :wall, interval: 1) { recurse }
+      StackProf.run(mode: :wall, interval: 10) { recurse }
     end
     # Program can use this to infer that sampling rate was too high
     assert_operator results[:missed_samples], :>, 0
