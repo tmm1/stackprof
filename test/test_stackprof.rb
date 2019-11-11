@@ -3,6 +3,7 @@ require 'stackprof'
 require 'minitest/autorun'
 require 'tempfile'
 require 'pathname'
+require 'timeout'
 
 class StackProfTest < MiniTest::Test
   def test_info
@@ -194,6 +195,19 @@ class StackProfTest < MiniTest::Test
     refute_empty profile[:frames]
   end
 
+  def test_wall_too_fast_no_hang
+    # The stack of `recurse` takes longer than 10μs to sample
+    # (probabilistically on a current CPU),
+    # so if this was not handled properly, the job queue would pile up
+    # faster than it was flushed, and the program would hang.
+    # Timeout ensures that if this is broken, the test itself does not hang.
+    results = Timeout.timeout(10) do
+      StackProf.run(mode: :wall, interval: 10) { recurse }
+    end
+    # Program can use this to infer that sampling rate was too high
+    assert_operator results[:missed_samples], :>, 0
+  end
+
   def math
     250_000.times do
       2 ** 10
@@ -206,5 +220,13 @@ class StackProfTest < MiniTest::Test
   ensure
     r.close
     w.close
+  end
+
+  def recurse(num = 1, depth = 1)
+    if depth == 10000
+      num
+    else
+      recurse(num * 2, depth + 1)
+    end
   end
 end
