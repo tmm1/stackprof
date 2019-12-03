@@ -17,6 +17,14 @@
 
 #define BUF_SIZE 2048
 
+#define FAKE_FRAME_GC    0
+
+static const char *fake_frame_cstrs[] = {
+	"(garbage collection)",
+};
+
+#define TOTAL_FAKE_FRAMES (sizeof(fake_frame_cstrs) / sizeof(char *))
+
 typedef struct {
     size_t total_samples;
     size_t caller_samples;
@@ -51,8 +59,7 @@ static struct {
     size_t unrecorded_gc_samples;
     st_table *frames;
 
-    VALUE fake_gc_frame;
-    VALUE fake_gc_frame_name;
+    VALUE fake_frame_names[TOTAL_FAKE_FRAMES];
     VALUE empty_string;
     VALUE frames_buffer[BUF_SIZE];
     int lines_buffer[BUF_SIZE];
@@ -211,8 +218,8 @@ frame_i(st_data_t key, st_data_t val, st_data_t arg)
 
     rb_hash_aset(results, rb_obj_id(frame), details);
 
-    if (frame == _stackprof.fake_gc_frame) {
-	name = _stackprof.fake_gc_frame_name;
+    if (FIXNUM_P(frame)) {
+	name = _stackprof.fake_frame_names[FIX2INT(frame)];
 	file = _stackprof.empty_string;
 	line = INT2FIX(0);
     } else {
@@ -533,7 +540,7 @@ stackprof_record_gc_samples()
 	}
     }
 
-    _stackprof.frames_buffer[0] = _stackprof.fake_gc_frame;
+    _stackprof.frames_buffer[0] = INT2FIX(FAKE_FRAME_GC);
     _stackprof.lines_buffer[0] = 0;
 
     for (i = 0; i < _stackprof.unrecorded_gc_samples; i++) {
@@ -653,6 +660,7 @@ stackprof_atfork_child(void)
 void
 Init_stackprof(void)
 {
+    size_t i;
 #define S(name) sym_##name = ID2SYM(rb_intern(#name));
     S(object);
     S(custom);
@@ -690,11 +698,13 @@ Init_stackprof(void)
     _stackprof.raw_timestamp_deltas_len = 0;
     _stackprof.raw_timestamp_deltas_capa = 0;
 
-    _stackprof.fake_gc_frame = INT2FIX(0x9C);
     _stackprof.empty_string = rb_str_new_cstr("");
-    _stackprof.fake_gc_frame_name = rb_str_new_cstr("(garbage collection)");
-    rb_global_variable(&_stackprof.fake_gc_frame_name);
     rb_global_variable(&_stackprof.empty_string);
+
+    for (i = 0; i < TOTAL_FAKE_FRAMES; i++) {
+	    _stackprof.fake_frame_names[i] = rb_str_new_cstr(fake_frame_cstrs[i]);
+	    rb_global_variable(&_stackprof.fake_frame_names[i]);
+    }
 
     rb_mStackProf = rb_define_module("StackProf");
     rb_define_singleton_method(rb_mStackProf, "running?", stackprof_running_p, 0);
