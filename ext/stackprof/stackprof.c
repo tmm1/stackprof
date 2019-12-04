@@ -33,6 +33,7 @@ static struct {
     VALUE mode;
     VALUE interval;
     VALUE out;
+    VALUE metadata;
 
     VALUE *raw_samples;
     size_t raw_samples_len;
@@ -59,7 +60,7 @@ static struct {
 
 static VALUE sym_object, sym_wall, sym_cpu, sym_custom, sym_name, sym_file, sym_line;
 static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_lines;
-static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_frames, sym_out, sym_aggregate, sym_raw_timestamp_deltas;
+static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_metadata, sym_frames, sym_out, sym_aggregate, sym_raw_timestamp_deltas;
 static VALUE sym_gc_samples, objtracer;
 static VALUE gc_hook;
 static VALUE rb_mStackProf;
@@ -72,7 +73,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 {
     struct sigaction sa;
     struct itimerval timer;
-    VALUE opts = Qnil, mode = Qnil, interval = Qnil, out = Qfalse;
+    VALUE opts = Qnil, mode = Qnil, interval = Qnil, metadata = rb_hash_new(), out = Qfalse;
     int raw = 0, aggregate = 1;
 
     if (_stackprof.running)
@@ -84,6 +85,14 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	mode = rb_hash_aref(opts, sym_mode);
 	interval = rb_hash_aref(opts, sym_interval);
 	out = rb_hash_aref(opts, sym_out);
+
+	VALUE metadata_val = rb_hash_aref(opts, sym_metadata);
+	if (RTEST(metadata_val)) {
+	    if (!RB_TYPE_P(metadata_val, T_HASH))
+		rb_raise(rb_eArgError, "metadata should be a hash");
+
+	    metadata = metadata_val;
+	}
 
 	if (RTEST(rb_hash_aref(opts, sym_raw)))
 	    raw = 1;
@@ -128,6 +137,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.aggregate = aggregate;
     _stackprof.mode = mode;
     _stackprof.interval = interval;
+    _stackprof.metadata = metadata;
     _stackprof.out = out;
 
     if (raw) {
@@ -258,6 +268,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     rb_hash_aset(results, sym_samples, SIZET2NUM(_stackprof.overall_samples));
     rb_hash_aset(results, sym_gc_samples, SIZET2NUM(_stackprof.during_gc));
     rb_hash_aset(results, sym_missed_samples, SIZET2NUM(_stackprof.overall_signals - _stackprof.overall_samples));
+    rb_hash_aset(results, sym_metadata, _stackprof.metadata);
 
     frames = rb_hash_new();
     rb_hash_aset(results, sym_frames, frames);
@@ -662,6 +673,7 @@ Init_stackprof(void)
     S(raw);
     S(raw_timestamp_deltas);
     S(out);
+    S(metadata);
     S(frames);
     S(aggregate);
 #undef S

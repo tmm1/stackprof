@@ -330,6 +330,7 @@ Option      | Meaning
 `interval`  | mode-relative sample rate [c.f.](#sampling)
 `aggregate` | defaults: `true` - if `false` disables [aggregation](#aggregation)
 `raw`       | defaults `false` - if `true` collects the extra data required by the `--flamegraph` and `--stackcollapse` report types
+`metadata`  | defaults to `{}`. Must be a `Hash`. metadata associated with this profile
 `save_every`| (rack middleware only) write the target file after this many requests
 
 ## Todo
