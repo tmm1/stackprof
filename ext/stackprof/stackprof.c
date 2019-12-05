@@ -17,6 +17,18 @@
 
 #define BUF_SIZE 2048
 
+#define FAKE_FRAME_GC    INT2FIX(0)
+#define FAKE_FRAME_MARK  INT2FIX(1)
+#define FAKE_FRAME_SWEEP INT2FIX(2)
+
+static const char *fake_frame_cstrs[] = {
+	"(garbage collection)",
+	"(marking)",
+	"(sweeping)",
+};
+
+#define TOTAL_FAKE_FRAMES (sizeof(fake_frame_cstrs) / sizeof(char *))
+
 typedef struct {
     size_t total_samples;
     size_t caller_samples;
@@ -49,10 +61,11 @@ static struct {
     size_t overall_samples;
     size_t during_gc;
     size_t unrecorded_gc_samples;
+    size_t unrecorded_gc_marking_samples;
+    size_t unrecorded_gc_sweeping_samples;
     st_table *frames;
 
-    VALUE fake_gc_frame;
-    VALUE fake_gc_frame_name;
+    VALUE fake_frame_names[TOTAL_FAKE_FRAMES];
     VALUE empty_string;
     VALUE frames_buffer[BUF_SIZE];
     int lines_buffer[BUF_SIZE];
@@ -61,6 +74,7 @@ static struct {
 static VALUE sym_object, sym_wall, sym_cpu, sym_custom, sym_name, sym_file, sym_line;
 static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_lines;
 static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_metadata, sym_frames, sym_out, sym_aggregate, sym_raw_timestamp_deltas;
+static VALUE sym_state, sym_marking, sym_sweeping;
 static VALUE sym_gc_samples, objtracer;
 static VALUE gc_hook;
 static VALUE rb_mStackProf;
@@ -211,8 +225,8 @@ frame_i(st_data_t key, st_data_t val, st_data_t arg)
 
     rb_hash_aset(results, rb_obj_id(frame), details);
 
-    if (frame == _stackprof.fake_gc_frame) {
-	name = _stackprof.fake_gc_frame_name;
+    if (FIXNUM_P(frame)) {
+	name = _stackprof.fake_frame_names[FIX2INT(frame)];
 	file = _stackprof.empty_string;
 	line = INT2FIX(0);
     } else {
@@ -533,15 +547,37 @@ stackprof_record_gc_samples()
 	}
     }
 
-    _stackprof.frames_buffer[0] = _stackprof.fake_gc_frame;
-    _stackprof.lines_buffer[0] = 0;
 
     for (i = 0; i < _stackprof.unrecorded_gc_samples; i++) {
 	int timestamp_delta = i == 0 ? delta_to_first_unrecorded_gc_sample : NUM2LONG(_stackprof.interval);
-	stackprof_record_sample_for_stack(1, timestamp_delta);
+
+      if (_stackprof.unrecorded_gc_marking_samples) {
+        _stackprof.frames_buffer[0] = FAKE_FRAME_MARK;
+        _stackprof.lines_buffer[0] = 0;
+        _stackprof.frames_buffer[1] = FAKE_FRAME_GC;
+        _stackprof.lines_buffer[1] = 0;
+        _stackprof.unrecorded_gc_marking_samples--;
+
+        stackprof_record_sample_for_stack(2, timestamp_delta);
+      } else if (_stackprof.unrecorded_gc_sweeping_samples) {
+        _stackprof.frames_buffer[0] = FAKE_FRAME_SWEEP;
+        _stackprof.lines_buffer[0] = 0;
+        _stackprof.frames_buffer[1] = FAKE_FRAME_GC;
+        _stackprof.lines_buffer[1] = 0;
+
+        _stackprof.unrecorded_gc_sweeping_samples--;
+
+        stackprof_record_sample_for_stack(2, timestamp_delta);
+      } else {
+        _stackprof.frames_buffer[0] = FAKE_FRAME_GC;
+        _stackprof.lines_buffer[0] = 0;
+        stackprof_record_sample_for_stack(1, timestamp_delta);
+      }
     }
     _stackprof.during_gc += _stackprof.unrecorded_gc_samples;
     _stackprof.unrecorded_gc_samples = 0;
+    _stackprof.unrecorded_gc_marking_samples = 0;
+    _stackprof.unrecorded_gc_sweeping_samples = 0;
 }
 
 static void
@@ -573,6 +609,12 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 {
     _stackprof.overall_signals++;
     if (rb_during_gc()) {
+	VALUE mode = rb_gc_latest_gc_info(sym_state);
+	if (mode == sym_marking) {
+	    _stackprof.unrecorded_gc_marking_samples++;
+	} else if (mode == sym_sweeping) {
+	    _stackprof.unrecorded_gc_sweeping_samples++;
+	}
 	_stackprof.unrecorded_gc_samples++;
 	rb_postponed_job_register_one(0, stackprof_gc_job_handler, (void*)0);
     } else {
@@ -653,6 +695,7 @@ stackprof_atfork_child(void)
 void
 Init_stackprof(void)
 {
+    size_t i;
 #define S(name) sym_##name = ID2SYM(rb_intern(#name));
     S(object);
     S(custom);
@@ -676,7 +719,13 @@ Init_stackprof(void)
     S(metadata);
     S(frames);
     S(aggregate);
+    S(state);
+    S(marking);
+    S(sweeping);
 #undef S
+
+    /* Need to run this to warm the symbol table before we call this during GC */
+    rb_gc_latest_gc_info(sym_state);
 
     gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, &_stackprof);
     rb_global_variable(&gc_hook);
@@ -690,11 +739,13 @@ Init_stackprof(void)
     _stackprof.raw_timestamp_deltas_len = 0;
     _stackprof.raw_timestamp_deltas_capa = 0;
 
-    _stackprof.fake_gc_frame = INT2FIX(0x9C);
     _stackprof.empty_string = rb_str_new_cstr("");
-    _stackprof.fake_gc_frame_name = rb_str_new_cstr("(garbage collection)");
-    rb_global_variable(&_stackprof.fake_gc_frame_name);
     rb_global_variable(&_stackprof.empty_string);
+
+    for (i = 0; i < TOTAL_FAKE_FRAMES; i++) {
+	    _stackprof.fake_frame_names[i] = rb_str_new_cstr(fake_frame_cstrs[i]);
+	    rb_global_variable(&_stackprof.fake_frame_names[i]);
+    }
 
     rb_mStackProf = rb_define_module("StackProf");
     rb_define_singleton_method(rb_mStackProf, "running?", stackprof_running_p, 0);

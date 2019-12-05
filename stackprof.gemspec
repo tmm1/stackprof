@@ -14,8 +14,10 @@ Gem::Specification.new do |s|
   s.executables << 'stackprof-flamegraph.pl'
   s.executables << 'stackprof-gprof2dot.py'
 
-  s.summary = 'sampling callstack-profiler for ruby 2.1+'
+  s.summary = 'sampling callstack-profiler for ruby 2.2+'
   s.description = 'stackprof is a fast sampling profiler for ruby code, with cpu, wallclock and object allocation samplers.'
+
+  s.required_ruby_version = '>= 2.2'
 
   s.license = 'MIT'
 

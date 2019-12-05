@@ -180,8 +180,16 @@ class StackProfTest < MiniTest::Test
 
     raw = profile[:raw]
     gc_frame = profile[:frames].values.find{ |f| f[:name] == "(garbage collection)" }
+    marking_frame = profile[:frames].values.find{ |f| f[:name] == "(marking)" }
+    sweeping_frame = profile[:frames].values.find{ |f| f[:name] == "(sweeping)" }
+
     assert gc_frame
-    assert_equal gc_frame[:samples], profile[:gc_samples]
+    assert marking_frame
+    assert sweeping_frame
+
+    assert_equal gc_frame[:total_samples], profile[:gc_samples]
+    assert_equal profile[:gc_samples], [gc_frame, marking_frame, sweeping_frame].map{|x| x[:samples] }.inject(:+)
+
     assert_operator profile[:gc_samples], :>, 0
     assert_operator profile[:missed_samples], :<=, 10
   end
