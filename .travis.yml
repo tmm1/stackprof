@@ -7,7 +7,6 @@ language: general
 
 env:
   matrix:
-    - RVM_RUBY_VERSION=2.1
     - RVM_RUBY_VERSION=2.2
     - RVM_RUBY_VERSION=2.3
     - RVM_RUBY_VERSION=2.4
