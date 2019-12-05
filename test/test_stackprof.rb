@@ -109,6 +109,36 @@ class StackProfTest < MiniTest::Test
     assert_equal 10, profile[:raw_timestamp_deltas].size
   end
 
+  def test_metadata
+    metadata = {
+      path: '/foo/bar',
+      revision: '5c0b01f1522ae8c194510977ae29377296dd236b',
+    }
+    profile = StackProf.run(mode: :cpu, metadata: metadata) do
+      math
+    end
+
+    assert_equal metadata, profile[:metadata]
+  end
+
+  def test_empty_metadata
+    profile = StackProf.run(mode: :cpu) do
+      math
+    end
+
+    assert_equal({}, profile[:metadata])
+  end
+
+  def test_raises_if_metadata_is_not_a_hash
+    exception = assert_raises ArgumentError do
+      StackProf.run(mode: :cpu, metadata: 'foobar') do
+        math
+      end
+    end
+
+    assert_equal 'metadata should be a hash', exception.message
+  end
+
   def test_fork
     StackProf.run do
       pid = fork do

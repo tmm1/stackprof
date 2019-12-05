@@ -64,4 +64,10 @@ class StackProf::MiddlewareTest < MiniTest::Test
     StackProf::Middleware.new(Object.new, raw: true)
     assert StackProf::Middleware.raw
   end
+
+  def test_metadata
+    metadata = { key: 'value' }
+    StackProf::Middleware.new(Object.new, metadata: metadata)
+    assert_equal metadata, StackProf::Middleware.metadata
+  end
 end

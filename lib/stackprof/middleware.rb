@@ -13,12 +13,18 @@ module StackProf
       Middleware.enabled  = options[:enabled]
       options[:path]      = 'tmp/' if options[:path].to_s.empty?
       Middleware.path     = options[:path]
+      Middleware.metadata = options[:metadata] || {}
       at_exit{ Middleware.save } if options[:save_at_exit]
     end
 
     def call(env)
       enabled = Middleware.enabled?(env)
-      StackProf.start(mode: Middleware.mode, interval: Middleware.interval, raw: Middleware.raw) if enabled
+      StackProf.start(
+        mode:     Middleware.mode,
+        interval: Middleware.interval,
+        raw:      Middleware.raw,
+        metadata: Middleware.metadata,
+      ) if enabled
       @app.call(env)
     ensure
       if enabled
@@ -31,7 +37,7 @@ module StackProf
     end
 
     class << self
-      attr_accessor :enabled, :mode, :interval, :raw, :path
+      attr_accessor :enabled, :mode, :interval, :raw, :path, :metadata
 
       def enabled?(env)
         if enabled.respond_to?(:call)
