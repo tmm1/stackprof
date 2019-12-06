@@ -191,7 +191,7 @@ class StackProfTest < MiniTest::Test
     assert_equal profile[:gc_samples], [gc_frame, marking_frame, sweeping_frame].map{|x| x[:samples] }.inject(:+)
 
     assert_operator profile[:gc_samples], :>, 0
-    assert_operator profile[:missed_samples], :<=, 10
+    assert_operator profile[:missed_samples], :<=, 25
   end
 
   def test_out
