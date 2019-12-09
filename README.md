@@ -1,5 +1,8 @@
 # Stackprof
 
+[![Build Status](https://travis-ci.org/tmm1/stackprof.svg?branch=master)](https://travis-ci.org/tmm1/stackprof)
+[![Gem Version](https://badge.fury.io/rb/stackprof.svg)](https://badge.fury.io/rb/stackprof)
+
 A sampling call-stack profiler for Ruby.
 
 Inspired heavily by [gperftools](https://code.google.com/p/gperftools/), and written as a replacement for [perftools.rb](https://github.com/tmm1/perftools.rb).
@@ -95,7 +98,7 @@ $ stackprof --flamegraph-viewer=tmp/flamegraph
 
 The `--flamegraph-viewer` command will output the exact shell command you need to run to open the `tmp/flamegraph` you generated with the built in stackprof flamegraph viewer:
 
-![](http://i.imgur.com/EwndrgD.png)
+![](https://i.imgur.com/EwndrgD.png)
 
 Alternatively, you can generate a flamegraph that uses [d3-flame-graph](https://github.com/spiermar/d3-flame-graph):
 
@@ -211,7 +214,7 @@ multiple reporting modes are supported:
 
 ### `StackProf::Report.new(data).print_graphviz`
 
-![](http://cl.ly/image/2t3l2q0l0B0A/content)
+![](https://cl.ly/image/2t3l2q0l0B0A/content)
 
 ```
 digraph profile {

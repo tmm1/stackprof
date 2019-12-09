@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
   s.name = 'stackprof'
   s.version = '0.2.13'
-  s.homepage = 'http://github.com/tmm1/stackprof'
+  s.homepage = 'https://github.com/tmm1/stackprof'
 
   s.authors = 'Aman Gupta'
   s.email   = 'aman@tmm1.net'
@@ -21,7 +21,9 @@ Gem::Specification.new do |s|
 
   s.license = 'MIT'
 
-  s.add_development_dependency 'rake-compiler', '~> 0.9'
+  s.required_ruby_version = '>= 2.1.0'
+
+  s.add_development_dependency 'rake-compiler', '~> 1.0'
   s.add_development_dependency 'mocha', '~> 0.14'
   s.add_development_dependency 'minitest', '~> 5.0'
 end
