@@ -1,7 +1,7 @@
 require "stackprof/stackprof"
 
 module StackProf
-  VERSION = '0.2.13'
+  VERSION = '0.2.14'
 end
 
 StackProf.autoload :Report, "stackprof/report.rb"

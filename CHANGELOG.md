@@ -1,15 +1,7 @@
-# 0.2.13
+# 0.2.14
 
-* Remove /ext from .gitignore
-* update gemfile
-* Add ruby 2.5 to CI targets
-* comment some of the inner workings
-* feature: add --json format
-* Add test coverage around the string branch in result writing
-* Flip conditional to use duck typing
-* Allow Pathname objects for Stackprof :out
-* Fix a compilation error and a compilation warning
-* Add `--alphabetical-flamegraph` for population-based instead of timeline
-* Add `--d3-flamegraph` to output html using d3-flame-graph
-* Avoid JSON::NestingError when processing deep stacks
-* Use docker for CI
+* Relax threshold of missed_samples to <= 25 in GC test
+* Support custom metadata option in stackprof
+* Drop support for Ruby 2.1
+* More generic handling of "fake" frame names
+* Record marking and sweeping as fake gc calls
