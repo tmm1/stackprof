@@ -8,7 +8,7 @@ Gem::Specification.new do |s|
 
   s.metadata = {
     'bug_tracker_uri'   => 'https://github.com/tmm1/stackprof/issues',
-    'changelog_uri'     => 'https://github.com/tmm1/stackprof/blob/master/CHANGELOG.md',
+    'changelog_uri'     => "https://github.com/tmm1/stackprof/blob/v#{s.version}/CHANGELOG.md",
     'documentation_uri' => "https://www.rubydoc.info/gems/stackprof/#{s.version}",
     'source_code_uri'   => "https://github.com/tmm1/stackprof/tree/v#{s.version}"
   }
