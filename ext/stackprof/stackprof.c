@@ -284,6 +284,8 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     rb_hash_aset(results, sym_missed_samples, SIZET2NUM(_stackprof.overall_signals - _stackprof.overall_samples));
     rb_hash_aset(results, sym_metadata, _stackprof.metadata);
 
+    _stackprof.metadata = Qnil;
+
     frames = rb_hash_new();
     rb_hash_aset(results, sym_frames, frames);
     st_foreach(_stackprof.frames, frame_i, (st_data_t)frames);
@@ -653,6 +655,9 @@ frame_mark_i(st_data_t key, st_data_t val, st_data_t arg)
 static void
 stackprof_gc_mark(void *data)
 {
+    if (RTEST(_stackprof.metadata))
+	rb_gc_mark(_stackprof.metadata);
+
     if (RTEST(_stackprof.out))
 	rb_gc_mark(_stackprof.out);
 
