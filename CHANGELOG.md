@@ -1,7 +1,3 @@
-# 0.2.14
+# 0.2.15
 
-* Relax threshold of missed_samples to <= 25 in GC test
-* Support custom metadata option in stackprof
-* Drop support for Ruby 2.1
-* More generic handling of "fake" frame names
-* Record marking and sweeping as fake gc calls
+* Mark the metadata object before the GC is invoked to prevent it from being garbage collected.
