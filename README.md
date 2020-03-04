@@ -141,6 +141,12 @@ StackProf.run(mode: :object, out: 'tmp/stackprof.dump', interval: 1) do
 end
 ```
 
+by default, samples taken during garbage collection will show as garbage collection frames
+including both mark and sweep phases. for longer traces, these can leave gaps in a flamegraph
+that are hard to follow and can be disabled by setting the `ignore_gc` option to true.
+garbage collection time will still be present in the profile but not explicitly marked with
+its own frame.
+
 samples are taken using a combination of three new C-APIs in ruby 2.1:
 
   - signal handlers enqueue a sampling job using `rb_postponed_job_register_one`.
@@ -328,6 +334,7 @@ Option      | Meaning
 `mode`      | mode of sampling: `:cpu`, `:wall`, `:object`, or `:custom` [c.f.](#sampling)
 `out`       | the target file, which will be overwritten
 `interval`  | mode-relative sample rate [c.f.](#sampling)
+`ignore_gc` | Ignore garbage collection frames
 `aggregate` | defaults: `true` - if `false` disables [aggregation](#aggregation)
 `raw`       | defaults `false` - if `true` collects the extra data required by the `--flamegraph` and `--stackcollapse` report types
 `metadata`  | defaults to `{}`. Must be a `Hash`. metadata associated with this profile
