@@ -6,6 +6,13 @@ Gem::Specification.new do |s|
   s.authors = 'Aman Gupta'
   s.email   = 'aman@tmm1.net'
 
+  s.metadata = {
+    'bug_tracker_uri'   => 'https://github.com/tmm1/stackprof/issues',
+    'changelog_uri'     => "https://github.com/tmm1/stackprof/blob/v#{s.version}/CHANGELOG.md",
+    'documentation_uri' => "https://www.rubydoc.info/gems/stackprof/#{s.version}",
+    'source_code_uri'   => "https://github.com/tmm1/stackprof/tree/v#{s.version}"
+  }
+
   s.files = `git ls-files`.split("\n")
   s.extensions = 'ext/stackprof/extconf.rb'
 
