@@ -3,3 +3,4 @@
 /lib/stackprof/stackprof.so
 *.sw?
 /pkg
+/Gemfile.lock
