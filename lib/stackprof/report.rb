@@ -654,7 +654,8 @@ module StackProf
           end
         end
       end
+    rescue SystemCallError
+      f.puts "        SOURCE UNAVAILABLE"
     end
-
   end
 end
