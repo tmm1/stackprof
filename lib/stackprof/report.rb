@@ -40,7 +40,7 @@ module StackProf
     end
 
     def max_samples
-      @data[:max_samples] ||= frames.max_by{ |addr, frame| frame[:samples] }.last[:samples]
+      @data[:max_samples] ||= @data[:frames].values.max_by{ |frame| frame[:samples] }[:samples]
     end
 
     def files
@@ -192,7 +192,7 @@ module StackProf
     end
 
     def flamegraph_row(f, x, y, weight, addr)
-      frame = frames[addr]
+      frame = @data[:frames][addr]
       f.print ',' if @rows_started
       @rows_started = true
       f.puts %{{"x":#{x},"y":#{y},"width":#{weight},"frame_id":#{addr},"frame":#{frame[:name].dump},"file":#{frame[:file].dump}}}
@@ -213,7 +213,7 @@ module StackProf
             weight += stack.last
           end
         else
-          frame = frames[val]
+          frame = @data[:frames][addr]
           child_name = "#{ frame[:name] } : #{ frame[:file] }"
           child_data = convert_to_d3_flame_graph_format(child_name, child_stacks, depth + 1)
           weight += child_data["value"]
