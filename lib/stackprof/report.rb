@@ -95,17 +95,50 @@ module StackProf
       print_flamegraph(f, skip_common, true)
     end
 
+    StackCursor = Struct.new(:raw, :idx, :length) do
+      def weight
+        @weight ||= raw[1 + idx + length]
+      end
+
+      def [](i)
+        if i >= length
+          nil
+        else
+          raw[1 + idx + i]
+        end
+      end
+
+      def <=>(other)
+        i = 0
+        while i < length && i < other.length
+          if self[i] != other[i]
+            return self[i] <=> other[i]
+          end
+          i += 1
+        end
+
+        return length <=> other.length
+      end
+    end
+
     def print_flamegraph(f, skip_common, alphabetical=false)
       raise "profile does not include raw samples (add `raw: true` to collecting StackProf.run)" unless raw = data[:raw]
 
       stacks = []
       max_x = 0
       max_y = 0
-      while len = raw.shift
+
+      idx = 0
+      loop do
+        len = raw[idx]
+        break unless len
         max_y = len if len > max_y
-        stack = raw.slice!(0, len+1)
+
+        stack = StackCursor.new(raw, idx, len)
         stacks << stack
-        max_x += stack.last
+        max_x += stack.weight
+
+        idx += len + 2
       end
 
       stacks.sort! if alphabetical
@@ -117,7 +150,7 @@ module StackProf
         x = 0
 
         stacks.each do |stack|
-          weight = stack.last
+          weight = stack.weight
           cell = stack[y] unless y == stack.length-1
 
           if cell.nil?
