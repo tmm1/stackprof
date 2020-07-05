@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'pp'
 require 'digest/md5'
 
@@ -38,7 +40,7 @@ module StackProf
     end
 
     def max_samples
-      @data[:max_samples] ||= frames.max_by{ |addr, frame| frame[:samples] }.last[:samples]
+      @data[:max_samples] ||= @data[:frames].values.max_by{ |frame| frame[:samples] }[:samples]
     end
 
     def files
@@ -93,17 +95,50 @@ module StackProf
       print_flamegraph(f, skip_common, true)
     end
 
+    StackCursor = Struct.new(:raw, :idx, :length) do
+      def weight
+        @weight ||= raw[1 + idx + length]
+      end
+
+      def [](i)
+        if i >= length
+          nil
+        else
+          raw[1 + idx + i]
+        end
+      end
+
+      def <=>(other)
+        i = 0
+        while i < length && i < other.length
+          if self[i] != other[i]
+            return self[i] <=> other[i]
+          end
+          i += 1
+        end
+
+        return length <=> other.length
+      end
+    end
+
     def print_flamegraph(f, skip_common, alphabetical=false)
       raise "profile does not include raw samples (add `raw: true` to collecting StackProf.run)" unless raw = data[:raw]
 
       stacks = []
       max_x = 0
       max_y = 0
-      while len = raw.shift
+
+      idx = 0
+      loop do
+        len = raw[idx]
+        break unless len
         max_y = len if len > max_y
-        stack = raw.slice!(0, len+1)
+
+        stack = StackCursor.new(raw, idx, len)
         stacks << stack
-        max_x += stack.last
+        max_x += stack.weight
+
+        idx += len + 2
       end
 
       stacks.sort! if alphabetical
@@ -115,7 +150,7 @@ module StackProf
         x = 0
 
         stacks.each do |stack|
-          weight = stack.last
+          weight = stack.weight
           cell = stack[y] unless y == stack.length-1
 
           if cell.nil?
@@ -157,7 +192,7 @@ module StackProf
     end
 
     def flamegraph_row(f, x, y, weight, addr)
-      frame = frames[addr]
+      frame = @data[:frames][addr]
       f.print ',' if @rows_started
       @rows_started = true
       f.puts %{{"x":#{x},"y":#{y},"width":#{weight},"frame_id":#{addr},"frame":#{frame[:name].dump},"file":#{frame[:file].dump}}}
@@ -178,7 +213,7 @@ module StackProf
             weight += stack.last
           end
         else
-          frame = frames[val]
+          frame = @data[:frames][addr]
           child_name = "#{ frame[:name] } : #{ frame[:file] }"
           child_data = convert_to_d3_flame_graph_format(child_name, child_stacks, depth + 1)
           weight += child_data["value"]
