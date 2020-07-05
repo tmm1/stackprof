@@ -232,6 +232,15 @@ class StackProfTest < MiniTest::Test
     refute_empty profile[:frames]
   end
 
+  def test_min_max_interval
+    [-1, 0, 1_000_000, 1_000_001].each do |invalid_interval|
+      err = assert_raises(ArgumentError, "invalid interval #{invalid_interval}") do
+        StackProf.run(interval: invalid_interval, debug: true) {}
+      end
+      assert_match(/microseconds/, err.message)
+    end
+  end
+
   def math
     250_000.times do
       2 ** 10

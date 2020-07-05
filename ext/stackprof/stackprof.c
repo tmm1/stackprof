@@ -16,6 +16,7 @@
 #include <pthread.h>
 
 #define BUF_SIZE 2048
+#define MICROSECONDS_IN_SECOND 1000000
 
 #define FAKE_FRAME_GC    INT2FIX(0)
 #define FAKE_FRAME_MARK  INT2FIX(1)
@@ -119,6 +120,10 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	    aggregate = 0;
     }
     if (!RTEST(mode)) mode = sym_wall;
+
+    if (!NIL_P(interval) && (NUM2INT(interval) < 1 || NUM2INT(interval) >= MICROSECONDS_IN_SECOND)) {
+        rb_raise(rb_eArgError, "interval is a number of microseconds between 1 and 1 million");
+    }
 
     if (!_stackprof.frames) {
 	_stackprof.frames = st_init_numtable();
