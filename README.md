@@ -269,7 +269,7 @@ the profiler is compiled as a C-extension and exposes a simple api: `StackProf.r
 the `run` method takes a block of code and returns a profile as a simple hash.
 
 ``` ruby
-# sample after every 1ms of cpu activity
+# sample after every 1s of cpu activity
 profile = StackProf.run(mode: :cpu, interval: 1000) do
   MyCode.execute
 end
