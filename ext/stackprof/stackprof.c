@@ -224,6 +224,20 @@ frame_lines_i(st_data_t key, st_data_t val, st_data_t arg)
     return ST_CONTINUE;
 }
 
+static VALUE
+coerce_frame_name(VALUE name, VALUE line)
+{
+    char *start_pointer = strstr(RSTRING_PTR(name), "<top (required)>\0");
+    if (start_pointer) {
+	VALUE new_name = rb_str_new(RSTRING_PTR(name), start_pointer - RSTRING_PTR(name));
+	rb_str_cat_cstr(new_name, "<require:");
+	rb_str_cat_cstr(new_name, RSTRING_PTR(line));
+	rb_str_cat_cstr(new_name, ">");
+	return new_name;
+    }
+    return name;
+}
+
 static int
 frame_i(st_data_t key, st_data_t val, st_data_t arg)
 {
@@ -242,12 +256,14 @@ frame_i(st_data_t key, st_data_t val, st_data_t arg)
 	line = INT2FIX(0);
     } else {
 	name = rb_profile_frame_full_label(frame);
-
 	file = rb_profile_frame_absolute_path(frame);
 	if (NIL_P(file))
 	    file = rb_profile_frame_path(frame);
 	line = rb_profile_frame_first_lineno(frame);
     }
+
+
+    name = coerce_frame_name(name, file);
 
     rb_hash_aset(details, sym_name, name);
     rb_hash_aset(details, sym_file, file);
