@@ -213,7 +213,7 @@ module StackProf
             weight += stack.last
           end
         else
-          frame = @data[:frames][addr]
+          frame = @data[:frames][val]
           child_name = "#{ frame[:name] } : #{ frame[:file] }"
           child_data = convert_to_d3_flame_graph_format(child_name, child_stacks, depth + 1)
           weight += child_data["value"]
