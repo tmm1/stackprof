@@ -109,8 +109,8 @@ And just open the result by your browser.
 
 four sampling modes are supported:
 
-  - :wall (using `ITIMER_REAL` and `SIGALRM`)
-  - :cpu (using `ITIMER_PROF` and `SIGPROF`) [default mode]
+  - :wall (using `ITIMER_REAL` and `SIGALRM`) [default mode]
+  - :cpu (using `ITIMER_PROF` and `SIGPROF`)
   - :object (using `RUBY_INTERNAL_EVENT_NEWOBJ`)
   - :custom (user-defined via `StackProf.sample`)
 
