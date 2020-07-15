@@ -45,7 +45,7 @@ end
 
 namespace :test do
   namespace :docker do
-    RUBY_VERSIONS = %w[2.1 2.2 2.3 2.4 2.5 2.6]
+    RUBY_VERSIONS = %w[2.2 2.3 2.4 2.5 2.6]
 
     RUBY_VERSIONS.each do |ruby_version|
       task "#{ruby_version}:build" do
