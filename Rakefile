@@ -30,7 +30,7 @@ Rake::TestTask.new 'test' do |t|
 end
 task :test => :build
 
-def build_ruby_docker_image ruby_version = "ruby-head"
+def build_ruby_docker_image(ruby_version="ruby-head")
   image   = "stackprof-#{ruby_version}"
   sh_opts = []
   sh_opts = [{[:out, :err] => File::NULL}, {}] if @mute_build_output
@@ -39,7 +39,7 @@ def build_ruby_docker_image ruby_version = "ruby-head"
   sh "docker build -t #{image} --build-arg=RVM_RUBY_VERSION=#{ruby_version} .", *sh_opts
 end
 
-def run_tests_in_docker ruby_version = "ruby-head"
+def run_tests_in_docker(ruby_version="ruby-head")
   sh "docker run --rm stackprof-#{ruby_version}"
 end
 
