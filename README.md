@@ -6,8 +6,13 @@ Inspired heavily by [gperftools](https://code.google.com/p/gperftools/), and wri
 
 ## Requirements
 
-* Ruby 2.2+
+* CRuby 2.2+
 * Linux-based OS
+
+For TruffleRuby/GraalVM Rubies, consider using the built in profilers that are available:
+```
+$ ruby --experimental-options --cpusampler --cpusampler.Mode=roots --cpusampler.SampleInternal FILE.rb
+```
 
 ## Getting Started
 
