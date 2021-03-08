@@ -445,7 +445,7 @@ module StackProf
         call, total = info.values_at(:samples, :total_samples)
         break if total < node_minimum || (limit && index >= limit)
 
-        sample = ''
+        sample = ''.dup
         sample << "#{call} (%2.1f%%)\\rof " % (call*100.0/overall_samples) if call < total
         sample << "#{total} (%2.1f%%)\\r" % (total*100.0/overall_samples)
         fontsize = (1.0 * call / max_samples) * 28 + 10
