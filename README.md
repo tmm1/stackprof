@@ -81,21 +81,21 @@ $ stackprof tmp/stackprof-cpu-*.dump --method 'Object#present?'
 
 For an experimental version of WebUI reporting of stackprof, see [stackprof-webnav](https://github.com/alisnic/stackprof-webnav)
 
-You can generate a flamegraph however additional data must be collected using the `raw: true` flag. Once you've collected results with this flag enabled you can generate a flamegraph:
+To generate flamegraphs with Stackprof, additional data must be collected using the `raw: true` flag. Once you've collected results with this flag enabled, generate a flamegraph with:
 
 ```
 $ stackprof --flamegraph tmp/stackprof-cpu-myapp.dump > tmp/flamegraph
 ```
 
-Once the flamegraph has been generated you can generate a viewer command with:
+After the flamegraph has been generated, you can generate a viewer command with:
 
 ```
 $ stackprof --flamegraph-viewer=tmp/flamegraph
 ```
 
-The `--flamegraph-viewer` command will output the exact shell command you need to run to open the `tmp/flamegraph` you generated with the built in stackprof flamegraph viewer:
+The `--flamegraph-viewer` command will output the exact shell command you need to run in order to open the `tmp/flamegraph` you generated with the built-in stackprof flamegraph viewer:
 
-![](http://i.imgur.com/EwndrgD.png)
+![Flamegraph Viewer](http://i.imgur.com/EwndrgD.png)
 
 Alternatively, you can generate a flamegraph that uses [d3-flame-graph](https://github.com/spiermar/d3-flame-graph):
 
@@ -107,16 +107,16 @@ And just open the result by your browser.
 
 ## Sampling
 
-four sampling modes are supported:
+Four sampling modes are supported:
 
-  - :wall (using `ITIMER_REAL` and `SIGALRM`) [default mode]
-  - :cpu (using `ITIMER_PROF` and `SIGPROF`)
-  - :object (using `RUBY_INTERNAL_EVENT_NEWOBJ`)
-  - :custom (user-defined via `StackProf.sample`)
+  - `:wall` (using `ITIMER_REAL` and `SIGALRM`) [default mode]
+  - `:cpu` (using `ITIMER_PROF` and `SIGPROF`)
+  - `:object` (using `RUBY_INTERNAL_EVENT_NEWOBJ`)
+  - `:custom` (user-defined via `StackProf.sample`)
 
-samplers have a tuneable interval which can be used to reduce overhead or increase granularity:
+Samplers have a tuneable interval which can be used to reduce overhead or increase granularity:
 
-  - wall time: sample every _interval_ microseconds of wallclock time (default: 1000)
+  - Wall time: sample every _interval_ microseconds of wallclock time (default: 1000)
 
 ```ruby
 StackProf.run(mode: :wall, out: 'tmp/stackprof.dump', interval: 1000) do
@@ -124,7 +124,7 @@ StackProf.run(mode: :wall, out: 'tmp/stackprof.dump', interval: 1000) do
 end
 ```
 
-  - cpu time: sample every _interval_ microseconds of cpu activity (default: 1000 = 1 millisecond)
+  - CPU time: sample every _interval_ microseconds of CPU activity (default: 1000 = 1 millisecond)
 
 ```ruby
 StackProf.run(mode: :cpu, out: 'tmp/stackprof.dump', interval: 1000) do
@@ -132,7 +132,7 @@ StackProf.run(mode: :cpu, out: 'tmp/stackprof.dump', interval: 1000) do
 end
 ```
 
-  - object allocation: sample every _interval_ allocations (default: 1)
+  - Object allocation: sample every _interval_ allocations (default: 1)
 
 
 ```ruby
@@ -141,36 +141,36 @@ StackProf.run(mode: :object, out: 'tmp/stackprof.dump', interval: 1) do
 end
 ```
 
-by default, samples taken during garbage collection will show as garbage collection frames
-including both mark and sweep phases. for longer traces, these can leave gaps in a flamegraph
-that are hard to follow and can be disabled by setting the `ignore_gc` option to true.
-garbage collection time will still be present in the profile but not explicitly marked with
+By default, samples taken during garbage collection will show as garbage collection frames
+including both mark and sweep phases. For longer traces, these can leave gaps in a flamegraph
+that are hard to follow. They can be disabled by setting the `ignore_gc` option to true.
+Garbage collection time will still be present in the profile but not explicitly marked with
 its own frame.
 
-samples are taken using a combination of three new C-APIs in ruby 2.1:
+Samples are taken using a combination of three new C-APIs in ruby 2.1:
 
-  - signal handlers enqueue a sampling job using `rb_postponed_job_register_one`.
+  - Signal handlers enqueue a sampling job using `rb_postponed_job_register_one`.
     this ensures callstack samples can be taken safely, in case the VM is garbage collecting
     or in some other inconsistent state during the interruption.
 
-  - stack frames are collected via `rb_profile_frames`, which provides low-overhead C-API access
-    to the VM's call stack. no object allocations occur in this path, allowing stackprof to collect
+  - Stack frames are collected via `rb_profile_frames`, which provides low-overhead C-API access
+    to the VM's call stack. No object allocations occur in this path, allowing stackprof to collect
     callstacks in allocation mode.
 
-  - in allocation mode, samples are taken via `rb_tracepoint_new(RUBY_INTERNAL_EVENT_NEWOBJ)`,
+  - In allocation mode, samples are taken via `rb_tracepoint_new(RUBY_INTERNAL_EVENT_NEWOBJ)`,
     which provides a notification every time the VM allocates a new object.
 
 ## Aggregation
 
-each sample consists of N stack frames, where a frame looks something like `MyClass#method` or `block in MySingleton.method`.
-for each of these frames in the sample, the profiler collects a few pieces of metadata:
+Each sample consists of N stack frames, where a frame looks something like `MyClass#method` or `block in MySingleton.method`.
+For each of these frames in the sample, the profiler collects a few pieces of metadata:
 
-  - samples: number of samples where this was the topmost frame
-  - total_samples: samples where this frame was in the stack
-  - lines: samples per line number in this frame
-  - edges: samples per callee frame (methods invoked by this frame)
+  - `samples`: Number of samples where this was the topmost frame
+  - `total_samples`: Samples where this frame was in the stack
+  - `lines`: Samples per line number in this frame
+  - `edges`: Samples per callee frame (methods invoked by this frame)
 
-the aggregation algorithm is roughly equivalent to the following pseudo code:
+The aggregation algorithm is roughly equivalent to the following pseudo code:
 
 ``` ruby
 trap('PROF') do
@@ -189,16 +189,16 @@ trap('PROF') do
 end
 ```
 
-this technique builds up an incremental callgraph from the samples. on any given frame,
+This technique builds up an incremental call graph from the samples. On any given frame,
 the sum of the outbound edge weights is equal to total samples collected on that frame
 (`frame.total_samples == frame.edges.values.sum`).
 
 ## Reporting
 
-multiple reporting modes are supported:
-  - text
-  - dotgraph
-  - source annotation
+Multiple reporting modes are supported:
+  - Text
+  - Dotgraph
+  - Source annotation
 
 ### `StackProf::Report.new(data).print_text`
 
@@ -216,8 +216,6 @@ multiple reporting modes are supported:
 ```
 
 ### `StackProf::Report.new(data).print_graphviz`
-
-![](http://cl.ly/image/2t3l2q0l0B0A/content)
 
 ```
 digraph profile {
@@ -265,8 +263,8 @@ block in A#math (/Users/tmm1/code/stackprof/sample.rb:21)
 
 ## Usage
 
-the profiler is compiled as a C-extension and exposes a simple api: `StackProf.run(mode: [:cpu|:wall|:object])`.
-the `run` method takes a block of code and returns a profile as a simple hash.
+The profiler is compiled as a C-extension and exposes a simple api: `StackProf.run(mode: [:cpu|:wall|:object])`.
+The `run` method takes a block of code and returns a profile as a simple hash.
 
 ``` ruby
 # sample after every 1ms of cpu activity
@@ -275,12 +273,12 @@ profile = StackProf.run(mode: :cpu, interval: 1000) do
 end
 ```
 
-this profile data structure is part of the public API, and is intended to be saved
-(as json/marshal for example) for later processing. the reports above can be generated
+This profile data structure is part of the public API, and is intended to be saved
+(as json/marshal for example) for later processing. The reports above can be generated
 by passing this structure into `StackProf::Report.new`.
 
-the format itself is very simple. it contains a header and a list of frames. each frame has a unique id and
-identifying information such as its name, file and line. the frame also contains sampling data, including per-line
+The format itself is very simple. It contains a header and a list of frames. Each frame has a unique ID and
+identifying information such as its name, file, and line. The frame also contains sampling data, including per-line
 samples, and a list of relationships to other frames represented as weighted edges.
 
 ``` ruby
@@ -307,20 +305,21 @@ samples, and a list of relationships to other frames represented as weighted edg
      :lines=>{8=>1}},
 ```
 
-above, `A#pow` was involved in 91 samples, and in all cases it was at the top of the stack on line 12.
+Above, `A#pow` was involved in 91 samples, and in all cases it was at the top of the stack on line 12.
 
-`A#initialize` was in 185 samples, but it was at the top of the stack in only 1 sample. the rest of the samples are
-divided up between its callee edges. all 91 calls to `A#pow` came from `A#initialize`, as seen by the edge numbered
+`A#initialize` was in 185 samples, but it was at the top of the stack in only 1 sample. The rest of the samples are
+divided up between its callee edges. All 91 calls to `A#pow` came from `A#initialize`, as seen by the edge numbered
 `70346498324780`.
 
 ## Advanced usage
 
-the profiler can be started and stopped manually. results are accumulated until retrieval, across
-multiple start/stop invocations.
+The profiler can be started and stopped manually. Results are accumulated until retrieval, across
+multiple `start`/`stop` invocations.
 
 ``` ruby
-StackProf.running?
+StackProf.running? # => false
 StackProf.start(mode: :cpu)
+StackProf.running? # => true
 StackProf.stop
 StackProf.results('/tmp/some.file')
 ```
@@ -331,14 +330,14 @@ StackProf.results('/tmp/some.file')
 
 Option      | Meaning
 -------     | ---------
-`mode`      | mode of sampling: `:cpu`, `:wall`, `:object`, or `:custom` [c.f.](#sampling)
-`out`       | the target file, which will be overwritten
-`interval`  | mode-relative sample rate [c.f.](#sampling)
+`mode`      | Mode of sampling: `:cpu`, `:wall`, `:object`, or `:custom` [c.f.](#sampling)
+`out`       | The target file, which will be overwritten
+`interval`  | Mode-relative sample rate [c.f.](#sampling)
 `ignore_gc` | Ignore garbage collection frames
-`aggregate` | defaults: `true` - if `false` disables [aggregation](#aggregation)
-`raw`       | defaults `false` - if `true` collects the extra data required by the `--flamegraph` and `--stackcollapse` report types
-`metadata`  | defaults to `{}`. Must be a `Hash`. metadata associated with this profile
-`save_every`| (rack middleware only) write the target file after this many requests
+`aggregate` | Defaults: `true` - if `false` disables [aggregation](#aggregation)
+`raw`       | Defaults `false` - if `true` collects the extra data required by the `--flamegraph` and `--stackcollapse` report types
+`metadata`  | Defaults to `{}`. Must be a `Hash`. metadata associated with this profile
+`save_every`| (Rack middleware only) write the target file after this many requests
 
 ## Todo
 
