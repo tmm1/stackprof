@@ -596,25 +596,17 @@ stackprof_record_gc_samples()
 static void
 stackprof_gc_job_handler(void *data)
 {
-    static int in_signal_handler = 0;
-    if (in_signal_handler) return;
     if (!_stackprof.running) return;
 
-    in_signal_handler++;
     stackprof_record_gc_samples();
-    in_signal_handler--;
 }
 
 static void
 stackprof_job_handler(void *data)
 {
-    static int in_signal_handler = 0;
-    if (in_signal_handler) return;
     if (!_stackprof.running) return;
 
-    in_signal_handler++;
     stackprof_record_sample();
-    in_signal_handler--;
 }
 
 static void
