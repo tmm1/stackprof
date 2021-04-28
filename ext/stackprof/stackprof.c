@@ -612,7 +612,14 @@ stackprof_job_handler(void *data)
 static void
 stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 {
+    static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
     _stackprof.overall_signals++;
+
+    if (!_stackprof.running) return;
+    if (!ruby_native_thread_p()) return;
+    if (pthread_mutex_trylock(&lock)) return;
+
     if (!_stackprof.ignore_gc && rb_during_gc()) {
 	VALUE mode = rb_gc_latest_gc_info(sym_state);
 	if (mode == sym_marking) {
@@ -625,6 +632,7 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
     } else {
 	rb_postponed_job_register_one(0, stackprof_job_handler, (void*)0);
     }
+    pthread_mutex_unlock(&lock);
 }
 
 static void
