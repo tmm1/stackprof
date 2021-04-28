@@ -22,6 +22,14 @@
 #define FAKE_FRAME_MARK  INT2FIX(1)
 #define FAKE_FRAME_SWEEP INT2FIX(2)
 
+/*
+ * As of Ruby 3.0, it should be safe to read stack frames at any time
+ * See https://github.com/ruby/ruby/commit/0e276dc458f94d9d79a0f7c7669bde84abe80f21
+ */
+#if RUBY_API_VERSION_MAJOR < 3
+  #define USE_POSTPONED_JOB
+#endif
+
 static const char *fake_frame_cstrs[] = {
 	"(garbage collection)",
 	"(marking)",
@@ -630,7 +638,11 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 	_stackprof.unrecorded_gc_samples++;
 	rb_postponed_job_register_one(0, stackprof_gc_job_handler, (void*)0);
     } else {
+#ifdef USE_POSTPONED_JOB
 	rb_postponed_job_register_one(0, stackprof_job_handler, (void*)0);
+#else
+	stackprof_job_handler(0);
+#endif
     }
     pthread_mutex_unlock(&lock);
 }
