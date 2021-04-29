@@ -22,6 +22,14 @@
 #define FAKE_FRAME_MARK  INT2FIX(1)
 #define FAKE_FRAME_SWEEP INT2FIX(2)
 
+/*
+ * As of Ruby 3.0, it should be safe to read stack frames at any time
+ * See https://github.com/ruby/ruby/commit/0e276dc458f94d9d79a0f7c7669bde84abe80f21
+ */
+#if RUBY_API_VERSION_MAJOR < 3
+  #define USE_POSTPONED_JOB
+#endif
+
 static const char *fake_frame_cstrs[] = {
 	"(garbage collection)",
 	"(marking)",
@@ -596,31 +604,30 @@ stackprof_record_gc_samples()
 static void
 stackprof_gc_job_handler(void *data)
 {
-    static int in_signal_handler = 0;
-    if (in_signal_handler) return;
     if (!_stackprof.running) return;
 
-    in_signal_handler++;
     stackprof_record_gc_samples();
-    in_signal_handler--;
 }
 
 static void
 stackprof_job_handler(void *data)
 {
-    static int in_signal_handler = 0;
-    if (in_signal_handler) return;
     if (!_stackprof.running) return;
 
-    in_signal_handler++;
     stackprof_record_sample();
-    in_signal_handler--;
 }
 
 static void
 stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 {
+    static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
     _stackprof.overall_signals++;
+
+    if (!_stackprof.running) return;
+    if (!ruby_native_thread_p()) return;
+    if (pthread_mutex_trylock(&lock)) return;
+
     if (!_stackprof.ignore_gc && rb_during_gc()) {
 	VALUE mode = rb_gc_latest_gc_info(sym_state);
 	if (mode == sym_marking) {
@@ -631,8 +638,13 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 	_stackprof.unrecorded_gc_samples++;
 	rb_postponed_job_register_one(0, stackprof_gc_job_handler, (void*)0);
     } else {
+#ifdef USE_POSTPONED_JOB
 	rb_postponed_job_register_one(0, stackprof_job_handler, (void*)0);
+#else
+	stackprof_job_handler(0);
+#endif
     }
+    pthread_mutex_unlock(&lock);
 }
 
 static void
