@@ -1,31 +1,17 @@
-task :default => :test
+require "bundler/gem_tasks"
+require "rake/testtask"
 
-# ==========================================================
-# Packaging
-# ==========================================================
-
-GEMSPEC = Gem::Specification::load('stackprof.gemspec')
-
-require 'rubygems/package_task'
-Gem::PackageTask.new(GEMSPEC) do |pkg|
+Rake::TestTask.new(:test) do |t|
+  t.libs << "test"
+  t.libs << "lib"
+  t.test_files = FileList["test/**/test_*.rb"]
 end
 
-# ==========================================================
-# Ruby Extension
-# ==========================================================
+require "rake/extensiontask"
 
-require 'rake/extensiontask'
-Rake::ExtensionTask.new('stackprof', GEMSPEC) do |ext|
-  ext.lib_dir = 'lib/stackprof'
+Rake::ExtensionTask.new("stackprof") do |ext|
+  ext.ext_dir = "ext/stackprof"
+  ext.lib_dir = "lib/stackprof"
 end
-task :build => :compile
 
-# ==========================================================
-# Testing
-# ==========================================================
-
-require 'rake/testtask'
-Rake::TestTask.new 'test' do |t|
-  t.test_files = FileList['test/test_*.rb']
-end
-task :test => :build
+task default: %i(compile test)
