@@ -39,16 +39,30 @@ class StackProfTest < MiniTest::Test
     end
     assert_equal :object, profile[:mode]
     assert_equal 1, profile[:interval]
-    assert_equal 2, profile[:samples]
+    if RUBY_VERSION >= '3'
+      assert_equal 4, profile[:samples]
+    else
+      assert_equal 2, profile[:samples]
+    end
 
     frame = profile[:frames].values.first
     assert_includes frame[:name], "StackProfTest#test_object_allocation"
     assert_equal 2, frame[:samples]
     assert_includes [profile_base_line - 2, profile_base_line], frame[:line]
-    assert_equal [1, 1], frame[:lines][profile_base_line+1]
-    assert_equal [1, 1], frame[:lines][profile_base_line+2]
+    if RUBY_VERSION >= '3'
+      assert_equal [2, 1], frame[:lines][profile_base_line+1]
+      assert_equal [2, 1], frame[:lines][profile_base_line+2]
+    else
+      assert_equal [1, 1], frame[:lines][profile_base_line+1]
+      assert_equal [1, 1], frame[:lines][profile_base_line+2]
+    end
     frame = profile[:frames].values[1] if RUBY_VERSION < '2.3'
-    assert_equal [2, 0], frame[:lines][profile_base_line]
+
+    if RUBY_VERSION >= '3'
+      assert_equal [4, 0], frame[:lines][profile_base_line]
+    else
+      assert_equal [2, 0], frame[:lines][profile_base_line]
+    end
   end
 
   def test_object_allocation_interval
@@ -64,7 +78,8 @@ class StackProfTest < MiniTest::Test
     end
 
     assert_operator profile[:samples], :>=, 1
-    frame = profile[:frames].values.first
+    offset = RUBY_VERSION >= '3' ? 1 : 0
+    frame = profile[:frames].values[offset]
     assert_includes frame[:name], "StackProfTest#math"
   end
 
@@ -74,7 +89,11 @@ class StackProfTest < MiniTest::Test
     end
 
     frame = profile[:frames].values.first
-    assert_equal "StackProfTest#idle", frame[:name]
+    if RUBY_VERSION >= '3'
+      assert_equal "IO.select", frame[:name]
+    else
+      assert_equal "StackProfTest#idle", frame[:name]
+    end
     assert_in_delta 200, frame[:samples], 25
   end
 
@@ -89,10 +108,16 @@ class StackProfTest < MiniTest::Test
     assert_equal :custom, profile[:mode]
     assert_equal 10, profile[:samples]
 
-    frame = profile[:frames].values.first
+    offset = RUBY_VERSION >= '3' ? 1 : 0
+    frame = profile[:frames].values[offset]
     assert_includes frame[:name], "StackProfTest#test_custom"
     assert_includes [profile_base_line-2, profile_base_line+1], frame[:line]
-    assert_equal [10, 10], frame[:lines][profile_base_line+2]
+
+    if RUBY_VERSION >= '3'
+      assert_equal [10, 0], frame[:lines][profile_base_line+2]
+    else
+      assert_equal [10, 10], frame[:lines][profile_base_line+2]
+    end
   end
 
   def test_raw
@@ -105,7 +130,9 @@ class StackProfTest < MiniTest::Test
     raw = profile[:raw]
     assert_equal 10, raw[-1]
     assert_equal raw[0] + 2, raw.size
-    assert_includes profile[:frames][raw[-2]][:name], 'StackProfTest#test_raw'
+
+    offset = RUBY_VERSION >= '3' ? -3 : -2
+    assert_includes profile[:frames][raw[offset]][:name], 'StackProfTest#test_raw'
     assert_equal 10, profile[:raw_timestamp_deltas].size
   end
 
