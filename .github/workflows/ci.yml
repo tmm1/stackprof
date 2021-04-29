@@ -25,7 +25,7 @@ jobs:
   platforms:
     strategy:
       matrix:
-        os: [macos, windows]
+        os: [macos]
         ruby: ['3.0']
     runs-on: ${{ matrix.os }}-latest
     steps:
