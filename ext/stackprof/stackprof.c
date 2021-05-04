@@ -209,13 +209,19 @@ stackprof_stop(VALUE self)
     return Qtrue;
 }
 
+#if SIZEOF_VOIDP == SIZEOF_LONG
+#  define PTR2NUM(x) (LONG2NUM((long)(x)))
+#else
+#  define PTR2NUM(x) (LL2NUM((LONG_LONG)(x)))
+#endif
+
 static int
 frame_edges_i(st_data_t key, st_data_t val, st_data_t arg)
 {
     VALUE edges = (VALUE)arg;
 
     intptr_t weight = (intptr_t)val;
-    rb_hash_aset(edges, rb_obj_id((VALUE)key), INT2FIX(weight));
+    rb_hash_aset(edges, PTR2NUM(key), INT2FIX(weight));
     return ST_CONTINUE;
 }
 
@@ -242,7 +248,7 @@ frame_i(st_data_t key, st_data_t val, st_data_t arg)
     VALUE name, file, edges, lines;
     VALUE line;
 
-    rb_hash_aset(results, rb_obj_id(frame), details);
+    rb_hash_aset(results, PTR2NUM(frame), details);
 
     if (FIXNUM_P(frame)) {
 	name = _stackprof.fake_frame_names[FIX2INT(frame)];
@@ -322,7 +328,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 	    rb_ary_push(raw_samples, SIZET2NUM(len));
 
 	    for (o = 0, n++; o < len; n++, o++)
-		rb_ary_push(raw_samples, rb_obj_id(_stackprof.raw_samples[n]));
+		rb_ary_push(raw_samples, PTR2NUM(_stackprof.raw_samples[n]));
 	    rb_ary_push(raw_samples, SIZET2NUM((size_t)_stackprof.raw_samples[n]));
 	}
 
