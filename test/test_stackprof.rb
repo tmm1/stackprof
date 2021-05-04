@@ -77,7 +77,7 @@ class StackProfTest < MiniTest::Test
   end
 
   def test_cputime
-    profile = StackProf.run(mode: :cpu, interval: 500) do
+    profile = StackProf.run(mode: :cpu, interval: 1000) do
       math
     end
 
