@@ -65,7 +65,12 @@ class StackProfTest < MiniTest::Test
     if RUBY_VERSION >= '3'
       assert_equal [4, 0], frame[:lines][profile_base_line]
     else
-      assert_equal [2, 0], frame[:lines][profile_base_line]
+      begin
+        assert_equal [2, 0], frame[:lines][profile_base_line]
+      rescue
+        p frame[:lines]
+        raise
+      end
     end
   end
 
