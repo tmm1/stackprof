@@ -44,7 +44,12 @@ class StackProfTest < MiniTest::Test
     assert_equal :object, profile[:mode]
     assert_equal 1, profile[:interval]
     if RUBY_VERSION >= '3'
-      assert_equal 4, profile[:samples]
+      begin
+        assert_equal 4, profile[:samples]
+      rescue Exception => e
+        p profile
+        raise
+      end
     else
       assert_equal 2, profile[:samples]
     end
