@@ -67,9 +67,9 @@ class StackProfTest < MiniTest::Test
     else
       begin
         assert_equal [2, 0], frame[:lines][profile_base_line]
-      rescue
+      rescue Exception => e
         p frame[:lines]
-        raise
+        raise e
       end
     end
   end
