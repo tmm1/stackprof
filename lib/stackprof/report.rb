@@ -234,9 +234,13 @@ module StackProf
       stacks = []
       max_x = 0
       max_y = 0
-      while len = raw.shift
+      idx = 0
+
+      while len = raw[idx]
+        idx += 1
         max_y = len if len > max_y
-        stack = raw.slice!(0, len+1)
+        stack = raw.slice(idx, len+1)
+        idx += len+1
         stacks << stack
         max_x += stack.last
       end
