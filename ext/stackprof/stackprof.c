@@ -13,10 +13,12 @@
 #include <ruby/intern.h>
 #include <signal.h>
 #include <sys/time.h>
+#include <time.h>
 #include <pthread.h>
 
 #define BUF_SIZE 2048
 #define MICROSECONDS_IN_SECOND 1000000
+#define NANOSECONDS_IN_SECOND 1000000000
 
 #define FAKE_FRAME_GC    INT2FIX(0)
 #define FAKE_FRAME_MARK  INT2FIX(1)
@@ -37,6 +39,39 @@ static const char *fake_frame_cstrs[] = {
 };
 
 #define TOTAL_FAKE_FRAMES (sizeof(fake_frame_cstrs) / sizeof(char *))
+
+#ifdef _POSIX_MONOTONIC_CLOCK
+  #define timestamp_t timespec
+  typedef struct timestamp_t timestamp_t;
+
+  static void capture_timestamp(timestamp_t *ts) {
+      clock_gettime(CLOCK_MONOTONIC, ts);
+  }
+
+  static int64_t delta_usec(timestamp_t *start, timestamp_t *end) {
+      int64_t result = 1000 * (end->tv_sec - start->tv_sec);
+      if (end->tv_nsec < start->tv_nsec) {
+	  result -= 1000;
+	  result += (NANOSECONDS_IN_SECOND + end->tv_nsec - start->tv_nsec) / 1000;
+      } else {
+	  result += (end->tv_nsec - start->tv_nsec) / 1000;
+      }
+      return result;
+  }
+#else
+  #define timestamp_t timeval
+  typedef struct timestamp_t timestamp_t;
+
+  static void capture_timestamp(timestamp_t *ts) {
+      gettimeofday(ts, NULL);
+  }
+
+  static int64_t delta_usec(timestamp_t *start, timestamp_t *end) {
+      struct timeval diff;
+      timersub(end, start, &diff);
+      return (1000 * diff.tv_sec) + diff.tv_usec;
+  }
+#endif
 
 typedef struct {
     size_t total_samples;
@@ -62,7 +97,7 @@ static struct {
     size_t raw_samples_capa;
     size_t raw_sample_index;
 
-    struct timeval last_sample_at;
+    struct timestamp_t last_sample_at;
     int *raw_timestamp_deltas;
     size_t raw_timestamp_deltas_len;
     size_t raw_timestamp_deltas_capa;
@@ -174,7 +209,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.out = out;
 
     if (raw) {
-	gettimeofday(&_stackprof.last_sample_at, NULL);
+	capture_timestamp(&_stackprof.last_sample_at);
     }
 
     return Qtrue;
@@ -430,7 +465,7 @@ st_numtable_increment(st_table *table, st_data_t key, size_t increment)
 }
 
 void
-stackprof_record_sample_for_stack(int num, int timestamp_delta)
+stackprof_record_sample_for_stack(int num, int64_t timestamp_delta)
 {
     int i, n;
     VALUE prev_frame = Qnil;
@@ -501,8 +536,9 @@ stackprof_record_sample_for_stack(int num, int timestamp_delta)
 	    _stackprof.raw_timestamp_deltas = realloc(_stackprof.raw_timestamp_deltas, sizeof(int) * _stackprof.raw_timestamp_deltas_capa);
 	}
 
-	/* Store the time delta (which is the amount of time between samples) */
-	_stackprof.raw_timestamp_deltas[_stackprof.raw_timestamp_deltas_len++] = timestamp_delta;
+	/* Store the time delta (which is the amount of microseconds between samples).
+	 * Since the sampling interval can't be more than a second, this should be safe to cast. */
+	_stackprof.raw_timestamp_deltas[_stackprof.raw_timestamp_deltas_len++] = (int) timestamp_delta;
     }
 
     for (i = 0; i < num; i++) {
@@ -535,21 +571,19 @@ stackprof_record_sample_for_stack(int num, int timestamp_delta)
     }
 
     if (_stackprof.raw) {
-	gettimeofday(&_stackprof.last_sample_at, NULL);
+	capture_timestamp(&_stackprof.last_sample_at);
     }
 }
 
 void
 stackprof_record_sample()
 {
-    int timestamp_delta = 0;
+    int64_t timestamp_delta = 0;
     int num;
     if (_stackprof.raw) {
-	struct timeval t;
-	struct timeval diff;
-	gettimeofday(&t, NULL);
-	timersub(&t, &_stackprof.last_sample_at, &diff);
-	timestamp_delta = (1000 * diff.tv_sec) + diff.tv_usec;
+	struct timestamp_t t;
+	capture_timestamp(&t);
+	timestamp_delta = delta_usec(&t, &_stackprof.last_sample_at);
     }
     num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
     stackprof_record_sample_for_stack(num, timestamp_delta);
@@ -558,17 +592,15 @@ stackprof_record_sample()
 void
 stackprof_record_gc_samples()
 {
-    int delta_to_first_unrecorded_gc_sample = 0;
-    int i;
+    int64_t delta_to_first_unrecorded_gc_sample = 0;
+    size_t i;
     if (_stackprof.raw) {
-	struct timeval t;
-	struct timeval diff;
-	gettimeofday(&t, NULL);
-	timersub(&t, &_stackprof.last_sample_at, &diff);
+	struct timestamp_t t;
+	capture_timestamp(&t);
 
 	// We don't know when the GC samples were actually marked, so let's
 	// assume that they were marked at a perfectly regular interval.
-	delta_to_first_unrecorded_gc_sample = (1000 * diff.tv_sec + diff.tv_usec) - (_stackprof.unrecorded_gc_samples - 1) * NUM2LONG(_stackprof.interval);
+	delta_to_first_unrecorded_gc_sample = delta_usec(&t, &_stackprof.last_sample_at) - (_stackprof.unrecorded_gc_samples - 1) * NUM2LONG(_stackprof.interval);
 	if (delta_to_first_unrecorded_gc_sample < 0) {
 	    delta_to_first_unrecorded_gc_sample = 0;
 	}
@@ -576,7 +608,7 @@ stackprof_record_gc_samples()
 
 
     for (i = 0; i < _stackprof.unrecorded_gc_samples; i++) {
-	int timestamp_delta = i == 0 ? delta_to_first_unrecorded_gc_sample : NUM2LONG(_stackprof.interval);
+	int64_t timestamp_delta = i == 0 ? delta_to_first_unrecorded_gc_sample : NUM2LONG(_stackprof.interval);
 
       if (_stackprof.unrecorded_gc_marking_samples) {
         _stackprof.frames_buffer[0] = FAKE_FRAME_MARK;
