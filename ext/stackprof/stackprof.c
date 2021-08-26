@@ -472,7 +472,7 @@ stackprof_record_sample_for_stack(int num, int64_t timestamp_delta)
 
     _stackprof.overall_samples++;
 
-    if (_stackprof.raw) {
+    if (_stackprof.raw && num > 0) {
 	int found = 0;
 
 	/* If there's no sample buffer allocated, then allocate one.  The buffer
