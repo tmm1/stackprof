@@ -69,7 +69,7 @@ static const char *fake_frame_cstrs[] = {
   static int64_t delta_usec(timestamp_t *start, timestamp_t *end) {
       struct timeval diff;
       timersub(end, start, &diff);
-      return (1000 * diff.tv_sec) + diff.tv_usec;
+      return (MICROSECONDS_IN_SECOND * diff.tv_sec) + diff.tv_usec;
   }
 #endif
 
