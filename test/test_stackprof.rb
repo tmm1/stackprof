@@ -78,9 +78,14 @@ class StackProfTest < MiniTest::Test
     end
 
     assert_operator profile[:samples], :>=, 1
-    offset = RUBY_VERSION >= '3' ? 1 : 0
-    frame = profile[:frames].values[offset]
-    assert_includes frame[:name], "StackProfTest#math"
+    if RUBY_VERSION >= '3'
+      assert profile[:frames].values.take(2).map { |f|
+        f[:name].include? "StackProfTest#math"
+      }.any?
+    else
+      frame = profile[:frames].values.first
+      assert_includes frame[:name], "StackProfTest#math"
+    end
   end
 
   def test_walltime
