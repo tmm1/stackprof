@@ -74,8 +74,8 @@ static const char *fake_frame_cstrs[] = {
 #endif
 
 typedef struct {
-    size_t total_samples;
-    size_t caller_samples;
+    uint64_t total_usec;
+    uint64_t caller_usec;
     size_t seen_at_sample_number;
     st_table *edges;
     st_table *lines;
@@ -88,6 +88,7 @@ static struct {
 
     VALUE mode;
     VALUE interval;
+    uint64_t interval_usec;
     VALUE out;
     VALUE metadata;
     int ignore_gc;
@@ -199,6 +200,12 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	rb_raise(rb_eArgError, "unknown profiler mode");
     }
 
+    if (RTEST(interval)) {
+	_stackprof.interval_usec = NUM2ULONG(interval);
+    } else {
+	_stackprof.interval_usec = 1;
+    }
+
     _stackprof.running = 1;
     _stackprof.raw = raw;
     _stackprof.aggregate = aggregate;
@@ -208,9 +215,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.metadata = metadata;
     _stackprof.out = out;
 
-    if (raw) {
-	capture_timestamp(&_stackprof.last_sample_at);
-    }
+    capture_timestamp(&_stackprof.last_sample_at);
 
     return Qtrue;
 }
@@ -304,8 +309,8 @@ frame_i(st_data_t key, st_data_t val, st_data_t arg)
 	rb_hash_aset(details, sym_line, line);
     }
 
-    rb_hash_aset(details, sym_total_samples, SIZET2NUM(frame_data->total_samples));
-    rb_hash_aset(details, sym_samples, SIZET2NUM(frame_data->caller_samples));
+    rb_hash_aset(details, sym_total_samples, ULL2NUM(frame_data->total_usec / _stackprof.interval_usec));
+    rb_hash_aset(details, sym_samples, ULL2NUM(frame_data->caller_usec / _stackprof.interval_usec));
 
     if (frame_data->edges) {
         edges = rb_hash_new();
@@ -547,12 +552,12 @@ stackprof_record_sample_for_stack(int num, int64_t timestamp_delta)
 	frame_data_t *frame_data = sample_for(frame);
 
 	if (frame_data->seen_at_sample_number != _stackprof.overall_samples) {
-	    frame_data->total_samples++;
+	    frame_data->total_usec += timestamp_delta;
 	}
 	frame_data->seen_at_sample_number = _stackprof.overall_samples;
 
 	if (i == 0) {
-	    frame_data->caller_samples++;
+	    frame_data->caller_usec += timestamp_delta;
 	} else if (_stackprof.aggregate) {
 	    if (!frame_data->edges)
 		frame_data->edges = st_init_numtable();
@@ -570,9 +575,7 @@ stackprof_record_sample_for_stack(int num, int64_t timestamp_delta)
 	prev_frame = frame;
     }
 
-    if (_stackprof.raw) {
-	capture_timestamp(&_stackprof.last_sample_at);
-    }
+    capture_timestamp(&_stackprof.last_sample_at);
 }
 
 void
@@ -580,11 +583,9 @@ stackprof_record_sample()
 {
     int64_t timestamp_delta = 0;
     int num;
-    if (_stackprof.raw) {
-	struct timestamp_t t;
-	capture_timestamp(&t);
-	timestamp_delta = delta_usec(&t, &_stackprof.last_sample_at);
-    }
+    struct timestamp_t t;
+    capture_timestamp(&t);
+    timestamp_delta = delta_usec(&t, &_stackprof.last_sample_at);
     num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
     stackprof_record_sample_for_stack(num, timestamp_delta);
 }
@@ -594,10 +595,9 @@ stackprof_record_gc_samples()
 {
     int64_t delta_to_first_unrecorded_gc_sample = 0;
     size_t i;
+    struct timestamp_t t;
+    capture_timestamp(&t);
     if (_stackprof.raw) {
-	struct timestamp_t t;
-	capture_timestamp(&t);
-
 	// We don't know when the GC samples were actually marked, so let's
 	// assume that they were marked at a perfectly regular interval.
 	delta_to_first_unrecorded_gc_sample = delta_usec(&t, &_stackprof.last_sample_at) - (_stackprof.unrecorded_gc_samples - 1) * NUM2LONG(_stackprof.interval);
