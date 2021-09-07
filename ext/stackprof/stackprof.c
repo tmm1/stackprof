@@ -49,9 +49,9 @@ static const char *fake_frame_cstrs[] = {
   }
 
   static int64_t delta_usec(timestamp_t *start, timestamp_t *end) {
-      int64_t result = 1000 * (end->tv_sec - start->tv_sec);
+      int64_t result = MICROSECONDS_IN_SECOND * (end->tv_sec - start->tv_sec);
       if (end->tv_nsec < start->tv_nsec) {
-	  result -= 1000;
+	  result -= MICROSECONDS_IN_SECOND;
 	  result += (NANOSECONDS_IN_SECOND + end->tv_nsec - start->tv_nsec) / 1000;
       } else {
 	  result += (end->tv_nsec - start->tv_nsec) / 1000;
