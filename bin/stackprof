@@ -14,7 +14,7 @@ parser = OptionParser.new(ARGV) do |o|
   o.on('--sort-total', "Sort --text or --files output on total samples\n\n"){ options[:sort] = true }
   o.on('--method [grep]', 'Zoom into specified method'){ |f| options[:format] = :method; options[:filter] = f }
   o.on('--file [grep]', "Show annotated code for specified file"){ |f| options[:format] = :file; options[:filter] = f }
-  o.on('--walk', "Walk the stacktrace interactively\n\n"){ |f| options[:walk] = true }
+  o.on('--walk', "Walk the stacktrace interactively (needs --method flag)\n\n"){ |f| options[:walk] = true }
   o.on('--callgrind', 'Callgrind output (use with kcachegrind, stackprof-gprof2dot.py)'){ options[:format] = :callgrind }
   o.on('--graphviz', "Graphviz output (use with dot)"){ options[:format] = :graphviz }
   o.on('--node-fraction [frac]', OptionParser::DecimalNumeric, 'Drop nodes representing less than [frac] fraction of samples'){ |n| options[:node_fraction] = n }
@@ -62,6 +62,11 @@ end
 
 options = default_options.merge(options)
 options.delete(:limit) if options[:limit] == 0
+
+if options[:walk] && !options[:method]
+  STDERR.puts "Missing --method option."
+  exit 1
+end
 
 case options[:format]
 when :text
