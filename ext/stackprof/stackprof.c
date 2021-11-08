@@ -58,6 +58,10 @@ static const char *fake_frame_cstrs[] = {
       }
       return result;
   }
+
+  static uint64_t timestamp_usec(timestamp_t *ts) {
+      return (MICROSECONDS_IN_SECOND * ts->tv_sec) + (ts->tv_nsec / 1000);
+  }
 #else
   #define timestamp_t timeval
   typedef struct timestamp_t timestamp_t;
@@ -71,6 +75,10 @@ static const char *fake_frame_cstrs[] = {
       timersub(end, start, &diff);
       return (MICROSECONDS_IN_SECOND * diff.tv_sec) + diff.tv_usec;
   }
+
+  static uint64_t timestamp_usec(timestamp_t *ts) {
+      return (MICROSECONDS_IN_SECOND * ts.tv_sec) + diff.tv_usec
+  }
 #endif
 
 typedef struct {
@@ -80,6 +88,11 @@ typedef struct {
     st_table *edges;
     st_table *lines;
 } frame_data_t;
+
+typedef struct {
+    uint64_t timestamp_usec;
+    int64_t delta_usec;
+} sample_time_t;
 
 static struct {
     int running;
@@ -98,9 +111,9 @@ static struct {
     size_t raw_sample_index;
 
     struct timestamp_t last_sample_at;
-    int *raw_timestamp_deltas;
-    size_t raw_timestamp_deltas_len;
-    size_t raw_timestamp_deltas_capa;
+    sample_time_t *raw_sample_times;
+    size_t raw_sample_times_len;
+    size_t raw_sample_times_capa;
 
     size_t overall_signals;
     size_t overall_samples;
@@ -119,7 +132,7 @@ static struct {
 static VALUE sym_object, sym_wall, sym_cpu, sym_custom, sym_name, sym_file, sym_line;
 static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_lines;
 static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_metadata, sym_frames, sym_ignore_gc, sym_out;
-static VALUE sym_aggregate, sym_raw_timestamp_deltas, sym_state, sym_marking, sym_sweeping;
+static VALUE sym_aggregate, sym_raw_sample_timestamps, sym_raw_timestamp_deltas, sym_state, sym_marking, sym_sweeping;
 static VALUE sym_gc_samples, objtracer;
 static VALUE gc_hook;
 static VALUE rb_mStackProf;
@@ -355,7 +368,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 
     if (_stackprof.raw && _stackprof.raw_samples_len) {
 	size_t len, n, o;
-	VALUE raw_timestamp_deltas;
+	VALUE raw_sample_timestamps, raw_timestamp_deltas;
 	VALUE raw_samples = rb_ary_new_capa(_stackprof.raw_samples_len);
 
 	for (n = 0; n < _stackprof.raw_samples_len; n++) {
@@ -375,17 +388,20 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 
 	rb_hash_aset(results, sym_raw, raw_samples);
 
-	raw_timestamp_deltas = rb_ary_new_capa(_stackprof.raw_timestamp_deltas_len);
+	raw_sample_timestamps = rb_ary_new_capa(_stackprof.raw_sample_times_len);
+	raw_timestamp_deltas = rb_ary_new_capa(_stackprof.raw_sample_times_len);
 
-	for (n = 0; n < _stackprof.raw_timestamp_deltas_len; n++) {
-	    rb_ary_push(raw_timestamp_deltas, INT2FIX(_stackprof.raw_timestamp_deltas[n]));
+	for (n = 0; n < _stackprof.raw_sample_times_len; n++) {
+	    rb_ary_push(raw_sample_timestamps, ULL2NUM(_stackprof.raw_sample_times[n].timestamp_usec));
+	    rb_ary_push(raw_timestamp_deltas, LL2NUM(_stackprof.raw_sample_times[n].delta_usec));
 	}
 
-	free(_stackprof.raw_timestamp_deltas);
-	_stackprof.raw_timestamp_deltas = NULL;
-	_stackprof.raw_timestamp_deltas_len = 0;
-	_stackprof.raw_timestamp_deltas_capa = 0;
+	free(_stackprof.raw_sample_times);
+	_stackprof.raw_sample_times = NULL;
+	_stackprof.raw_sample_times_len = 0;
+	_stackprof.raw_sample_times_capa = 0;
 
+	rb_hash_aset(results, sym_raw_sample_timestamps, raw_sample_timestamps);
 	rb_hash_aset(results, sym_raw_timestamp_deltas, raw_timestamp_deltas);
 
 	_stackprof.raw = 0;
@@ -465,7 +481,7 @@ st_numtable_increment(st_table *table, st_data_t key, size_t increment)
 }
 
 void
-stackprof_record_sample_for_stack(int num, int64_t timestamp_delta)
+stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t timestamp_delta)
 {
     int i, n;
     VALUE prev_frame = Qnil;
@@ -524,21 +540,23 @@ stackprof_record_sample_for_stack(int num, int64_t timestamp_delta)
 	}
 
 	/* If there's no timestamp delta buffer, allocate one */
-	if (!_stackprof.raw_timestamp_deltas) {
-	    _stackprof.raw_timestamp_deltas_capa = 100;
-	    _stackprof.raw_timestamp_deltas = malloc(sizeof(int) * _stackprof.raw_timestamp_deltas_capa);
-	    _stackprof.raw_timestamp_deltas_len = 0;
+	if (!_stackprof.raw_sample_times) {
+	    _stackprof.raw_sample_times_capa = 100;
+	    _stackprof.raw_sample_times = malloc(sizeof(sample_time_t) * _stackprof.raw_sample_times_capa);
+	    _stackprof.raw_sample_times_len = 0;
 	}
 
 	/* Double the buffer size if it's too small */
-	while (_stackprof.raw_timestamp_deltas_capa <= _stackprof.raw_timestamp_deltas_len + 1) {
-	    _stackprof.raw_timestamp_deltas_capa *= 2;
-	    _stackprof.raw_timestamp_deltas = realloc(_stackprof.raw_timestamp_deltas, sizeof(int) * _stackprof.raw_timestamp_deltas_capa);
+	while (_stackprof.raw_sample_times_capa <= _stackprof.raw_sample_times_len + 1) {
+	    _stackprof.raw_sample_times_capa *= 2;
+	    _stackprof.raw_sample_times = realloc(_stackprof.raw_sample_times, sizeof(sample_time_t) * _stackprof.raw_sample_times_capa);
 	}
 
-	/* Store the time delta (which is the amount of microseconds between samples).
-	 * Since the sampling interval can't be more than a second, this should be safe to cast. */
-	_stackprof.raw_timestamp_deltas[_stackprof.raw_timestamp_deltas_len++] = (int) timestamp_delta;
+	/* Store the time delta (which is the amount of microseconds between samples). */
+	_stackprof.raw_sample_times[_stackprof.raw_sample_times_len++] = (sample_time_t) {
+	    .timestamp_usec = sample_timestamp,
+	    .delta_usec = timestamp_delta,
+        };
     }
 
     for (i = 0; i < num; i++) {
@@ -578,25 +596,29 @@ stackprof_record_sample_for_stack(int num, int64_t timestamp_delta)
 void
 stackprof_record_sample()
 {
+    uint64_t start_timestamp = 0;
     int64_t timestamp_delta = 0;
     int num;
     if (_stackprof.raw) {
 	struct timestamp_t t;
 	capture_timestamp(&t);
+	start_timestamp = timestamp_usec(&t);
 	timestamp_delta = delta_usec(&t, &_stackprof.last_sample_at);
     }
     num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
-    stackprof_record_sample_for_stack(num, timestamp_delta);
+    stackprof_record_sample_for_stack(num, start_timestamp, timestamp_delta);
 }
 
 void
 stackprof_record_gc_samples()
 {
     int64_t delta_to_first_unrecorded_gc_sample = 0;
+    uint64_t start_timestamp = 0;
     size_t i;
     if (_stackprof.raw) {
 	struct timestamp_t t;
 	capture_timestamp(&t);
+	start_timestamp = timestamp_usec(&t);
 
 	// We don't know when the GC samples were actually marked, so let's
 	// assume that they were marked at a perfectly regular interval.
@@ -605,7 +627,6 @@ stackprof_record_gc_samples()
 	    delta_to_first_unrecorded_gc_sample = 0;
 	}
     }
-
 
     for (i = 0; i < _stackprof.unrecorded_gc_samples; i++) {
 	int64_t timestamp_delta = i == 0 ? delta_to_first_unrecorded_gc_sample : NUM2LONG(_stackprof.interval);
@@ -617,7 +638,7 @@ stackprof_record_gc_samples()
         _stackprof.lines_buffer[1] = 0;
         _stackprof.unrecorded_gc_marking_samples--;
 
-        stackprof_record_sample_for_stack(2, timestamp_delta);
+        stackprof_record_sample_for_stack(2, start_timestamp, timestamp_delta);
       } else if (_stackprof.unrecorded_gc_sweeping_samples) {
         _stackprof.frames_buffer[0] = FAKE_FRAME_SWEEP;
         _stackprof.lines_buffer[0] = 0;
@@ -626,11 +647,11 @@ stackprof_record_gc_samples()
 
         _stackprof.unrecorded_gc_sweeping_samples--;
 
-        stackprof_record_sample_for_stack(2, timestamp_delta);
+        stackprof_record_sample_for_stack(2, start_timestamp, timestamp_delta);
       } else {
         _stackprof.frames_buffer[0] = FAKE_FRAME_GC;
         _stackprof.lines_buffer[0] = 0;
-        stackprof_record_sample_for_stack(1, timestamp_delta);
+        stackprof_record_sample_for_stack(1, start_timestamp, timestamp_delta);
       }
     }
     _stackprof.during_gc += _stackprof.unrecorded_gc_samples;
@@ -780,6 +801,7 @@ Init_stackprof(void)
     S(mode);
     S(interval);
     S(raw);
+    S(raw_sample_timestamps);
     S(raw_timestamp_deltas);
     S(out);
     S(metadata);
@@ -802,9 +824,9 @@ Init_stackprof(void)
     _stackprof.raw_samples_capa = 0;
     _stackprof.raw_sample_index = 0;
 
-    _stackprof.raw_timestamp_deltas = NULL;
-    _stackprof.raw_timestamp_deltas_len = 0;
-    _stackprof.raw_timestamp_deltas_capa = 0;
+    _stackprof.raw_sample_times = NULL;
+    _stackprof.raw_sample_times_len = 0;
+    _stackprof.raw_sample_times_capa = 0;
 
     _stackprof.empty_string = rb_str_new_cstr("");
     rb_global_variable(&_stackprof.empty_string);
