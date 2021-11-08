@@ -152,7 +152,7 @@ class StackProfTest < MiniTest::Test
 
     assert_equal 10, profile[:raw_timestamp_deltas].size
     total_duration = after_monotonic - before_monotonic
-    assert_operator profile[:raw_timestamp_deltas].sum, :<, total_duration
+    assert_operator profile[:raw_timestamp_deltas].inject(&:+), :<, total_duration
   end
 
   def test_metadata
