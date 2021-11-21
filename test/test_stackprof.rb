@@ -126,11 +126,15 @@ class StackProfTest < MiniTest::Test
   end
 
   def test_raw
+    before_monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
+
     profile = StackProf.run(mode: :custom, raw: true) do
       10.times do
         StackProf.sample
       end
     end
+
+    after_monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
 
     raw = profile[:raw]
     assert_equal 10, raw[-1]
@@ -138,7 +142,17 @@ class StackProfTest < MiniTest::Test
 
     offset = RUBY_VERSION >= '3' ? -3 : -2
     assert_includes profile[:frames][raw[offset]][:name], 'StackProfTest#test_raw'
+
+    assert_equal 10, profile[:raw_sample_timestamps].size
+    profile[:raw_sample_timestamps].each_cons(2) do |t1, t2|
+      assert_operator t1, :>, before_monotonic
+      assert_operator t2, :>=, t1
+      assert_operator t2, :<, after_monotonic
+    end
+
     assert_equal 10, profile[:raw_timestamp_deltas].size
+    total_duration = after_monotonic - before_monotonic
+    assert_operator profile[:raw_timestamp_deltas].inject(&:+), :<, total_duration
   end
 
   def test_metadata
