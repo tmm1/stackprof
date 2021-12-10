@@ -72,6 +72,14 @@ class StackProfTest < MiniTest::Test
     assert_equal 10, profile[:samples]
   end
 
+  def test_object_allocation_missed_samples
+    profile = StackProf.run(mode: :object, interval: 100) do
+      1000.times { Object.new }
+    end
+    assert_equal 10, profile[:samples]
+    assert_equal 0, profile[:missed_samples]
+  end
+
   def test_cputime
     profile = StackProf.run(mode: :cpu, interval: 500) do
       math

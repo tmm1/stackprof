@@ -117,6 +117,7 @@ static struct {
 
     size_t overall_signals;
     size_t overall_samples;
+    size_t newobj_signals;
     size_t during_gc;
     size_t unrecorded_gc_samples;
     size_t unrecorded_gc_marking_samples;
@@ -185,6 +186,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	_stackprof.frames = st_init_numtable();
 	_stackprof.overall_signals = 0;
 	_stackprof.overall_samples = 0;
+	_stackprof.newobj_signals = 0;
 	_stackprof.during_gc = 0;
     }
 
@@ -709,9 +711,10 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 static void
 stackprof_newobj_handler(VALUE tpval, void *data)
 {
-    _stackprof.overall_signals++;
-    if (RTEST(_stackprof.interval) && _stackprof.overall_signals % NUM2LONG(_stackprof.interval))
+    _stackprof.newobj_signals++;
+    if (RTEST(_stackprof.interval) && _stackprof.newobj_signals % NUM2LONG(_stackprof.interval))
 	return;
+    _stackprof.overall_signals++;
     stackprof_job_handler(0);
 }
 
