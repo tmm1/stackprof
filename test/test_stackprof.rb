@@ -224,7 +224,6 @@ class StackProfTest < MiniTest::Test
       end
     end
 
-    raw = profile[:raw]
     gc_frame = profile[:frames].values.find{ |f| f[:name] == "(garbage collection)" }
     marking_frame = profile[:frames].values.find{ |f| f[:name] == "(marking)" }
     sweeping_frame = profile[:frames].values.find{ |f| f[:name] == "(sweeping)" }
