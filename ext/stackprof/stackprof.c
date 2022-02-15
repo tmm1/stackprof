@@ -7,6 +7,7 @@
 **********************************************************************/
 
 #include <ruby/ruby.h>
+#include <ruby/version.h>
 #include <ruby/debug.h>
 #include <ruby/st.h>
 #include <ruby/io.h>
