@@ -126,6 +126,9 @@ static struct {
 
     VALUE fake_frame_names[TOTAL_FAKE_FRAMES];
     VALUE empty_string;
+
+    int buffer_count;
+    sample_time_t buffer_time;
     VALUE frames_buffer[BUF_SIZE];
     int lines_buffer[BUF_SIZE];
 } _stackprof;
@@ -594,9 +597,17 @@ stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t ti
     }
 }
 
+// buffer the current profile frames
+// This must be async-signal-safe
+// Returns immediately if another set of frames are already in the buffer
 void
-stackprof_record_sample()
+stackprof_buffer_sample(void)
 {
+    if (_stackprof.buffer_count > 0) {
+	// Another sample is already pending
+	return;
+    }
+
     uint64_t start_timestamp = 0;
     int64_t timestamp_delta = 0;
     int num;
@@ -606,12 +617,16 @@ stackprof_record_sample()
 	start_timestamp = timestamp_usec(&t);
 	timestamp_delta = delta_usec(&t, &_stackprof.last_sample_at);
     }
+
     num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
-    stackprof_record_sample_for_stack(num, start_timestamp, timestamp_delta);
+
+    _stackprof.buffer_count = num;
+    _stackprof.buffer_time.timestamp_usec = start_timestamp;
+    _stackprof.buffer_time.delta_usec = timestamp_delta;
 }
 
 void
-stackprof_record_gc_samples()
+stackprof_record_gc_samples(void)
 {
     int64_t delta_to_first_unrecorded_gc_sample = 0;
     uint64_t start_timestamp = 0;
@@ -661,20 +676,47 @@ stackprof_record_gc_samples()
     _stackprof.unrecorded_gc_sweeping_samples = 0;
 }
 
+// record the sample previously buffered by stackprof_buffer_sample
 static void
-stackprof_gc_job_handler(void *data)
+stackprof_record_buffer(void)
+{
+    stackprof_record_sample_for_stack(_stackprof.buffer_count, _stackprof.buffer_time.timestamp_usec, _stackprof.buffer_time.delta_usec);
+
+    // reset the buffer
+    _stackprof.buffer_count = 0;
+}
+
+static void
+stackprof_sample_and_record(void)
+{
+    stackprof_buffer_sample();
+    stackprof_record_buffer();
+}
+
+static void
+stackprof_job_record_gc(void *data)
 {
     if (!_stackprof.running) return;
 
     stackprof_record_gc_samples();
 }
 
+#ifdef USE_POSTPONED_JOB
 static void
-stackprof_job_handler(void *data)
+stackprof_job_sample_and_record(void *data)
 {
     if (!_stackprof.running) return;
 
-    stackprof_record_sample();
+    stackprof_sample_and_record();
+}
+#endif
+
+static void
+stackprof_job_record_buffer(void *data)
+{
+    if (!_stackprof.running) return;
+
+    stackprof_record_buffer();
 }
 
 static void
@@ -696,12 +738,16 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 	    _stackprof.unrecorded_gc_sweeping_samples++;
 	}
 	_stackprof.unrecorded_gc_samples++;
-	rb_postponed_job_register_one(0, stackprof_gc_job_handler, (void*)0);
+	rb_postponed_job_register_one(0, stackprof_job_record_gc, (void*)0);
     } else {
 #ifdef USE_POSTPONED_JOB
-	rb_postponed_job_register_one(0, stackprof_job_handler, (void*)0);
+	rb_postponed_job_register_one(0, stackprof_job_sample_and_record, (void*)0);
 #else
-	stackprof_job_handler(0);
+	// Buffer a sample immediately, if an existing sample exists this will
+	// return immediately
+	stackprof_buffer_sample();
+	// Enqueue a job to record the sample
+	rb_postponed_job_register_one(0, stackprof_job_record_buffer, (void*)0);
 #endif
     }
     pthread_mutex_unlock(&lock);
@@ -713,7 +759,7 @@ stackprof_newobj_handler(VALUE tpval, void *data)
     _stackprof.overall_signals++;
     if (RTEST(_stackprof.interval) && _stackprof.overall_signals % NUM2LONG(_stackprof.interval))
 	return;
-    stackprof_job_handler(0);
+    stackprof_sample_and_record();
 }
 
 static VALUE
@@ -723,7 +769,7 @@ stackprof_sample(VALUE self)
 	return Qfalse;
 
     _stackprof.overall_signals++;
-    stackprof_job_handler(0);
+    stackprof_sample_and_record();
     return Qtrue;
 }
 
