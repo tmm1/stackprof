@@ -32,3 +32,27 @@ class ReportDumpTest < MiniTest::Test
     assert_equal expected, Marshal.load(marshal_data)
   end
 end
+
+class ReportReadTest < MiniTest::Test
+  require 'pathname'
+
+  def test_from_file_read_json
+    file = fixture("profile.json")
+    report = StackProf::Report.from_file(file)
+
+    assert_equal({ mode: "cpu" }, report.data)
+  end
+
+  def test_from_file_read_marshal
+    file = fixture("profile.dump")
+    report = StackProf::Report.from_file(file)
+
+    assert_equal({ mode: "cpu" }, report.data)
+  end
+
+  private
+
+  def fixture(name)
+    Pathname.new(__dir__).join("fixtures", name)
+  end
+end
