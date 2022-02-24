@@ -615,7 +615,7 @@ stackprof_buffer_sample(void)
 	struct timestamp_t t;
 	capture_timestamp(&t);
 	start_timestamp = timestamp_usec(&t);
-	timestamp_delta = delta_usec(&t, &_stackprof.last_sample_at);
+	timestamp_delta = delta_usec(&_stackprof.last_sample_at, &t);
     }
 
     num = rb_profile_frames(0, sizeof(_stackprof.frames_buffer) / sizeof(VALUE), _stackprof.frames_buffer, _stackprof.lines_buffer);
@@ -638,7 +638,7 @@ stackprof_record_gc_samples(void)
 
 	// We don't know when the GC samples were actually marked, so let's
 	// assume that they were marked at a perfectly regular interval.
-	delta_to_first_unrecorded_gc_sample = delta_usec(&t, &_stackprof.last_sample_at) - (_stackprof.unrecorded_gc_samples - 1) * NUM2LONG(_stackprof.interval);
+	delta_to_first_unrecorded_gc_sample = delta_usec(&_stackprof.last_sample_at, &t) - (_stackprof.unrecorded_gc_samples - 1) * NUM2LONG(_stackprof.interval);
 	if (delta_to_first_unrecorded_gc_sample < 0) {
 	    delta_to_first_unrecorded_gc_sample = 0;
 	}

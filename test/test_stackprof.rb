@@ -131,6 +131,7 @@ class StackProfTest < MiniTest::Test
     profile = StackProf.run(mode: :custom, raw: true) do
       10.times do
         StackProf.sample
+        sleep 0.0001
       end
     end
 
@@ -153,6 +154,10 @@ class StackProfTest < MiniTest::Test
     assert_equal 10, profile[:raw_timestamp_deltas].size
     total_duration = after_monotonic - before_monotonic
     assert_operator profile[:raw_timestamp_deltas].inject(&:+), :<, total_duration
+
+    profile[:raw_timestamp_deltas].each do |delta|
+      assert_operator delta, :>, 0
+    end
   end
 
   def test_metadata
