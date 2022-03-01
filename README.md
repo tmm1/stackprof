@@ -27,7 +27,7 @@ Then run `$ bundle install`. Alternatively you can run `$ gem install stackprof`
 in ruby:
 
 ``` ruby
-StackProf.run(mode: :cpu, out: 'tmp/stackprof-cpu-myapp.dump') do
+StackProf.run(mode: :cpu, path: 'tmp/stackprof-cpu-myapp.dump') do
   #...
 end
 ```
@@ -119,7 +119,7 @@ Samplers have a tuneable interval which can be used to reduce overhead or increa
   - Wall time: sample every _interval_ microseconds of wallclock time (default: 1000)
 
 ```ruby
-StackProf.run(mode: :wall, out: 'tmp/stackprof.dump', interval: 1000) do
+StackProf.run(mode: :wall, path: 'tmp/stackprof.dump', interval: 1000) do
   #...
 end
 ```
@@ -127,7 +127,7 @@ end
   - CPU time: sample every _interval_ microseconds of CPU activity (default: 1000 = 1 millisecond)
 
 ```ruby
-StackProf.run(mode: :cpu, out: 'tmp/stackprof.dump', interval: 1000) do
+StackProf.run(mode: :cpu, path: 'tmp/stackprof.dump', interval: 1000) do
   #...
 end
 ```
@@ -136,7 +136,7 @@ end
 
 
 ```ruby
-StackProf.run(mode: :object, out: 'tmp/stackprof.dump', interval: 1) do
+StackProf.run(mode: :object, path: 'tmp/stackprof.dump', interval: 1) do
   #...
 end
 ```
@@ -331,7 +331,7 @@ StackProf.results('/tmp/some.file')
 Option      | Meaning
 -------     | ---------
 `mode`      | Mode of sampling: `:cpu`, `:wall`, `:object`, or `:custom` [c.f.](#sampling)
-`out`       | The target file, which will be overwritten
+`path`       | The target file, which will be overwritten
 `interval`  | Mode-relative sample rate [c.f.](#sampling)
 `ignore_gc` | Ignore garbage collection frames
 `aggregate` | Defaults: `true` - if `false` disables [aggregation](#aggregation)
