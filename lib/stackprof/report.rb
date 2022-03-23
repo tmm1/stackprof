@@ -2,9 +2,43 @@
 
 require 'pp'
 require 'digest/md5'
+require 'json'
 
 module StackProf
   class Report
+    MARSHAL_SIGNATURE = "\x04\x08"
+
+    class << self
+      def from_file(file)
+        if (content = IO.binread(file)).start_with?(MARSHAL_SIGNATURE)
+          new(Marshal.load(content))
+        else
+          from_json(JSON.parse(content))
+        end
+      end
+
+      def from_json(json)
+        new(parse_json(json))
+      end
+
+      def parse_json(json)
+        json.keys.each do |key|
+          value = json.delete(key)
+          from_json(value) if value.is_a?(Hash)
+
+          new_key = case key
+          when /\A[0-9]*\z/
+            key.to_i
+          else
+            key.to_sym
+          end
+
+          json[new_key] = value
+        end
+        json
+      end
+    end
+
     def initialize(data)
       @data = data
     end

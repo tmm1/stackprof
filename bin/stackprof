@@ -42,7 +42,7 @@ reports = []
 while ARGV.size > 0
   begin
     file = ARGV.pop
-    reports << StackProf::Report.new(Marshal.load(IO.binread(file)))
+    reports << StackProf::Report.from_file(file)
   rescue TypeError => e
     STDERR.puts "** error parsing #{file}: #{e.inspect}"
   end
