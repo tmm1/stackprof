@@ -5,6 +5,10 @@ require 'tempfile'
 require 'pathname'
 
 class StackProfTest < MiniTest::Test
+  def setup
+    Object.new # warm some caches to avoid flakiness
+  end
+
   def test_info
     profile = StackProf.run{}
     assert_equal 1.2, profile[:version]

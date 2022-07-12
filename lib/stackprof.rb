@@ -1,5 +1,9 @@
 require "stackprof/stackprof"
 
+if defined?(RubyVM::YJIT) && RubyVM::YJIT.enabled?
+  StackProf.use_postponed_job!
+end
+
 module StackProf
   VERSION = '0.2.19'
 end
