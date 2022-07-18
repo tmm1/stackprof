@@ -25,19 +25,13 @@
 #define FAKE_FRAME_MARK  INT2FIX(1)
 #define FAKE_FRAME_SWEEP INT2FIX(2)
 
-/*
- * As of Ruby 3.0, it should be safe to read stack frames at any time
- * See https://github.com/ruby/ruby/commit/0e276dc458f94d9d79a0f7c7669bde84abe80f21
- */
-#if RUBY_API_VERSION_MAJOR < 3
-  #define USE_POSTPONED_JOB
-#endif
-
 static const char *fake_frame_cstrs[] = {
 	"(garbage collection)",
 	"(marking)",
 	"(sweeping)",
 };
+
+static int stackprof_use_postponed_job = 1;
 
 #define TOTAL_FAKE_FRAMES (sizeof(fake_frame_cstrs) / sizeof(char *))
 
@@ -701,7 +695,6 @@ stackprof_job_record_gc(void *data)
     stackprof_record_gc_samples();
 }
 
-#ifdef USE_POSTPONED_JOB
 static void
 stackprof_job_sample_and_record(void *data)
 {
@@ -709,7 +702,6 @@ stackprof_job_sample_and_record(void *data)
 
     stackprof_sample_and_record();
 }
-#endif
 
 static void
 stackprof_job_record_buffer(void *data)
@@ -740,15 +732,15 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 	_stackprof.unrecorded_gc_samples++;
 	rb_postponed_job_register_one(0, stackprof_job_record_gc, (void*)0);
     } else {
-#ifdef USE_POSTPONED_JOB
-	rb_postponed_job_register_one(0, stackprof_job_sample_and_record, (void*)0);
-#else
-	// Buffer a sample immediately, if an existing sample exists this will
-	// return immediately
-	stackprof_buffer_sample();
-	// Enqueue a job to record the sample
-	rb_postponed_job_register_one(0, stackprof_job_record_buffer, (void*)0);
-#endif
+        if (stackprof_use_postponed_job) {
+            rb_postponed_job_register_one(0, stackprof_job_sample_and_record, (void*)0);
+        } else {
+            // Buffer a sample immediately, if an existing sample exists this will
+            // return immediately
+            stackprof_buffer_sample();
+            // Enqueue a job to record the sample
+            rb_postponed_job_register_one(0, stackprof_job_record_buffer, (void*)0);
+        }
     }
     pthread_mutex_unlock(&lock);
 }
@@ -826,9 +818,24 @@ stackprof_atfork_child(void)
     stackprof_stop(rb_mStackProf);
 }
 
+static VALUE
+stackprof_use_postponed_job_l(VALUE self)
+{
+    stackprof_use_postponed_job = 1;
+    return Qnil;
+}
+
 void
 Init_stackprof(void)
 {
+   /*
+    * As of Ruby 3.0, it should be safe to read stack frames at any time, unless YJIT is enabled
+    * See https://github.com/ruby/ruby/commit/0e276dc458f94d9d79a0f7c7669bde84abe80f21
+    */
+    #if RUBY_API_VERSION_MAJOR < 3
+    stackprof_use_postponed_job = 0;
+    #endif
+
     size_t i;
 #define S(name) sym_##name = ID2SYM(rb_intern(#name));
     S(object);
@@ -890,6 +897,7 @@ Init_stackprof(void)
     rb_define_singleton_method(rb_mStackProf, "stop", stackprof_stop, 0);
     rb_define_singleton_method(rb_mStackProf, "results", stackprof_results, -1);
     rb_define_singleton_method(rb_mStackProf, "sample", stackprof_sample, 0);
+    rb_define_singleton_method(rb_mStackProf, "use_postponed_job!", stackprof_use_postponed_job_l, 0);
 
     pthread_atfork(stackprof_atfork_prepare, stackprof_atfork_parent, stackprof_atfork_child);
 }
