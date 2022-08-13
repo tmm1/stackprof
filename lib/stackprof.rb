@@ -1,4 +1,8 @@
-require "stackprof/stackprof"
+if RUBY_ENGINE == 'truffleruby'
+  require "stackprof/truffleruby"
+else
+  require "stackprof/stackprof"
+end
 
 if defined?(RubyVM::YJIT) && RubyVM::YJIT.enabled?
   StackProf.use_postponed_job!
