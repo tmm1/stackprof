@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require 'pp'
-require 'digest/md5'
+require 'digest/sha2'
 require 'json'
 
 module StackProf
@@ -52,7 +52,7 @@ module StackProf
     def normalized_frames
       id2hash = {}
       @data[:frames].each do |frame, info|
-        id2hash[frame.to_s] = info[:hash] = Digest::MD5.hexdigest("#{info[:name]}#{info[:file]}#{info[:line]}")
+        id2hash[frame.to_s] = info[:hash] = Digest::SHA256.hexdigest("#{info[:name]}#{info[:file]}#{info[:line]}")
       end
       @data[:frames].inject(Hash.new) do |hash, (frame, info)|
         info = hash[id2hash[frame.to_s]] = info.dup
