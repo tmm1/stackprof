@@ -308,4 +308,4 @@ class StackProfTest < MiniTest::Test
     r.close
     w.close
   end
-end
+end unless RUBY_ENGINE == 'truffleruby'

@@ -146,6 +146,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     VALUE opts = Qnil, mode = Qnil, interval = Qnil, metadata = rb_hash_new(), out = Qfalse;
     int ignore_gc = 0;
     int raw = 0, aggregate = 1;
+    VALUE metadata_val;
 
     if (_stackprof.running)
 	return Qfalse;
@@ -160,7 +161,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	    ignore_gc = 1;
 	}
 
-	VALUE metadata_val = rb_hash_aref(opts, sym_metadata);
+	metadata_val = rb_hash_aref(opts, sym_metadata);
 	if (RTEST(metadata_val)) {
 	    if (!RB_TYPE_P(metadata_val, T_HASH))
 		rb_raise(rb_eArgError, "metadata should be a hash");
@@ -597,14 +598,15 @@ stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t ti
 void
 stackprof_buffer_sample(void)
 {
+    uint64_t start_timestamp = 0;
+    int64_t timestamp_delta = 0;
+    int num;
+
     if (_stackprof.buffer_count > 0) {
 	// Another sample is already pending
 	return;
     }
 
-    uint64_t start_timestamp = 0;
-    int64_t timestamp_delta = 0;
-    int num;
     if (_stackprof.raw) {
 	struct timestamp_t t;
 	capture_timestamp(&t);
@@ -828,13 +830,13 @@ stackprof_use_postponed_job_l(VALUE self)
 void
 Init_stackprof(void)
 {
+    size_t i;
    /*
     * As of Ruby 3.0, it should be safe to read stack frames at any time, unless YJIT is enabled
     * See https://github.com/ruby/ruby/commit/0e276dc458f94d9d79a0f7c7669bde84abe80f21
     */
     stackprof_use_postponed_job = RUBY_API_VERSION_MAJOR < 3;
 
-    size_t i;
 #define S(name) sym_##name = ID2SYM(rb_intern(#name));
     S(object);
     S(custom);
