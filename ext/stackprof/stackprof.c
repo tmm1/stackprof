@@ -832,9 +832,7 @@ Init_stackprof(void)
     * As of Ruby 3.0, it should be safe to read stack frames at any time, unless YJIT is enabled
     * See https://github.com/ruby/ruby/commit/0e276dc458f94d9d79a0f7c7669bde84abe80f21
     */
-    #if RUBY_API_VERSION_MAJOR < 3
-    stackprof_use_postponed_job = 0;
-    #endif
+    stackprof_use_postponed_job = RUBY_API_VERSION_MAJOR < 3;
 
     size_t i;
 #define S(name) sym_##name = ID2SYM(rb_intern(#name));
