@@ -9,7 +9,7 @@ if defined?(RubyVM::YJIT) && RubyVM::YJIT.enabled?
 end
 
 module StackProf
-  VERSION = '0.2.20'
+  VERSION = '0.2.21'
 end
 
 StackProf.autoload :Report, "stackprof/report.rb"
