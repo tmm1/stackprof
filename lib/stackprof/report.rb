@@ -582,7 +582,9 @@ module StackProf
 
         # Pick selection
         STDOUT.printf "> "
-        selection = STDIN.gets.chomp.to_i - 1
+        selection = STDIN.gets
+        break unless selection # EOF
+        selection = selection.chomp.to_i - 1
         STDOUT.puts "\n\n\n"
 
         # Determine if it was a valid choice
