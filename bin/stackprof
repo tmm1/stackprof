@@ -6,27 +6,27 @@ if ARGV.first == "run"
   ARGV.shift
   env = {}
   parser = OptionParser.new(ARGV) do |o|
-    o.banner = "Usage: stackprof run [--mode|--out|--interval] -- COMMAND"
+    o.banner = "Usage: stackprof run [--mode=MODE|--out=FILE|--interval=INTERVAL|--format=FORMAT] -- COMMAND"
     o.banner = "Usage: stackprof [file.dump]+ [--text|--method=NAME|--callgrind|--graphviz]"
 
-    o.on('--mode', 'Mode of sampling: cpu, wall, object, default to wall') do |mode|
+    o.on('--mode [MODE]', String, 'Mode of sampling: cpu, wall, object, default to wall') do |mode|
       env["STACKPROF_MODE"] = mode
     end
 
-    o.on('--out', 'The target file, which will be overwritten. Defaults to a random temporary file') do |out|
+    o.on('--out [FILENAME]', String, 'The target file, which will be overwritten. Defaults to a random temporary file') do |out|
       env['STACKPROF_OUT'] = out
     end
 
-    o.on('--interval', 'Mode-relative sample rate') do |interval|
-      env['STACKPROF_INTERVAL'] = Integer(interval).to_s
+    o.on('--interval [MILLISECONDS]', Integer, 'Mode-relative sample rate') do |interval|
+      env['STACKPROF_INTERVAL'] = interval.to_s
     end
 
-    o.on('--raw', 'collects the extra data required by the --flamegraph and --stackcollapse report types') do
-      env['STACKPROF_RAW'] = '1'
+    o.on('--raw', 'collects the extra data required by the --flamegraph and --stackcollapse report types') do |raw|
+      env['STACKPROF_RAW'] = raw.to_s
     end
 
-    o.on('--ignore-gc', 'Ignore garbage collection frames') do
-      env['STACKPROF_IGNORE_GC'] = '1'
+    o.on('--ignore-gc', 'Ignore garbage collection frames') do |gc|
+      env['STACKPROF_IGNORE_GC'] = gc.to_s
     end
   end
   parser.parse!
