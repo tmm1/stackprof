@@ -125,6 +125,8 @@ static struct {
     sample_time_t buffer_time;
     VALUE frames_buffer[BUF_SIZE];
     int lines_buffer[BUF_SIZE];
+
+    pthread_t target_thread;
 } _stackprof;
 
 static VALUE sym_object, sym_wall, sym_cpu, sym_custom, sym_name, sym_file, sym_line;
@@ -219,6 +221,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.ignore_gc = ignore_gc;
     _stackprof.metadata = metadata;
     _stackprof.out = out;
+    _stackprof.target_thread = pthread_self();
 
     if (raw) {
 	capture_timestamp(&_stackprof.last_sample_at);
@@ -721,7 +724,22 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
     _stackprof.overall_signals++;
 
     if (!_stackprof.running) return;
-    if (!ruby_native_thread_p()) return;
+
+    if (_stackprof.mode == sym_wall) {
+        // In "wall" mode, the SIGALRM signal will arrive at an arbitrary thread.
+        // In order to provide more useful results, especially under threaded web
+        // servers, we want to forward this signal to the original thread
+        // StackProf was started from.
+        // According to POSIX.1-2008 TC1 pthread_kill and pthread_self should be
+        // async-signal-safe.
+        if (pthread_self() != _stackprof.target_thread) {
+            pthread_kill(_stackprof.target_thread, sig);
+            return;
+        }
+    } else {
+        if (!ruby_native_thread_p()) return;
+    }
+
     if (pthread_mutex_trylock(&lock)) return;
 
     if (!_stackprof.ignore_gc && rb_during_gc()) {
