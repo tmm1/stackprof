@@ -6,7 +6,7 @@ Inspired heavily by [gperftools](https://code.google.com/p/gperftools/), and wri
 
 ## Requirements
 
-* Ruby 2.2+
+* Ruby 2.7+
 * Linux-based OS
 
 ## Getting Started

@@ -44,7 +44,12 @@ class StackProfTest < MiniTest::Test
     assert_equal :object, profile[:mode]
     assert_equal 1, profile[:interval]
     if RUBY_VERSION >= '3'
-      assert_equal 4, profile[:samples]
+      begin
+        assert_equal 4, profile[:samples]
+      rescue Exception => e
+        p profile
+        raise
+      end
     else
       assert_equal 2, profile[:samples]
     end
@@ -65,7 +70,12 @@ class StackProfTest < MiniTest::Test
     if RUBY_VERSION >= '3'
       assert_equal [4, 0], frame[:lines][profile_base_line]
     else
-      assert_equal [2, 0], frame[:lines][profile_base_line]
+      begin
+        assert_equal [2, 0], frame[:lines][profile_base_line]
+      rescue Exception => e
+        p frame[:lines]
+        raise e
+      end
     end
   end
 
@@ -77,7 +87,7 @@ class StackProfTest < MiniTest::Test
   end
 
   def test_cputime
-    profile = StackProf.run(mode: :cpu, interval: 500) do
+    profile = StackProf.run(mode: :cpu, interval: 1000) do
       math
     end
 

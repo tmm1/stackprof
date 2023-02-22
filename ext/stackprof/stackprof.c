@@ -96,7 +96,6 @@ static struct {
 
     VALUE mode;
     VALUE interval;
-    VALUE out;
     VALUE metadata;
     int ignore_gc;
 
@@ -131,7 +130,7 @@ static struct {
 
 static VALUE sym_object, sym_wall, sym_cpu, sym_custom, sym_name, sym_file, sym_line;
 static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_lines;
-static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_metadata, sym_frames, sym_ignore_gc, sym_out;
+static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_metadata, sym_frames, sym_ignore_gc;
 static VALUE sym_aggregate, sym_raw_sample_timestamps, sym_raw_timestamp_deltas, sym_state, sym_marking, sym_sweeping;
 static VALUE sym_gc_samples, objtracer;
 static VALUE gc_hook;
@@ -145,7 +144,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 {
     struct sigaction sa;
     struct itimerval timer;
-    VALUE opts = Qnil, mode = Qnil, interval = Qnil, metadata = rb_hash_new(), out = Qfalse;
+    VALUE opts = Qnil, mode = Qnil, interval = Qnil, metadata = rb_hash_new();
     int ignore_gc = 0;
     int raw = 0, aggregate = 1;
     VALUE metadata_val;
@@ -158,7 +157,6 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     if (RTEST(opts)) {
 	mode = rb_hash_aref(opts, sym_mode);
 	interval = rb_hash_aref(opts, sym_interval);
-	out = rb_hash_aref(opts, sym_out);
 	if (RTEST(rb_hash_aref(opts, sym_ignore_gc))) {
 	    ignore_gc = 1;
 	}
@@ -220,7 +218,6 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.interval = interval;
     _stackprof.ignore_gc = ignore_gc;
     _stackprof.metadata = metadata;
-    _stackprof.out = out;
     _stackprof.target_thread = pthread_self();
 
     if (raw) {
@@ -343,7 +340,7 @@ frame_i(st_data_t key, st_data_t val, st_data_t arg)
 }
 
 static VALUE
-stackprof_results(int argc, VALUE *argv, VALUE self)
+stackprof_results(VALUE self, VALUE io)
 {
     VALUE results, frames;
 
@@ -409,33 +406,20 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 	_stackprof.raw = 0;
     }
 
-    if (argc == 1)
-	_stackprof.out = argv[0];
-
-    if (RTEST(_stackprof.out)) {
+    if (RTEST(io)) {
 	VALUE file;
-	if (rb_respond_to(_stackprof.out, rb_intern("to_io"))) {
-	    file = rb_io_check_io(_stackprof.out);
+	if (rb_respond_to(io, rb_intern("to_io"))) {
+	    file = rb_io_check_io(io);
 	} else {
-	    file = rb_file_open_str(_stackprof.out, "w");
+	    file = rb_file_open_str(io, "w");
 	}
 
 	rb_marshal_dump(results, file);
 	rb_io_flush(file);
-	_stackprof.out = Qnil;
 	return file;
     } else {
 	return results;
     }
-}
-
-static VALUE
-stackprof_run(int argc, VALUE *argv, VALUE self)
-{
-    rb_need_block();
-    stackprof_start(argc, argv, self);
-    rb_ensure(rb_yield, Qundef, stackprof_stop, self);
-    return stackprof_results(0, 0, self);
 }
 
 static VALUE
@@ -799,9 +783,6 @@ stackprof_gc_mark(void *data)
     if (RTEST(_stackprof.metadata))
 	rb_gc_mark(_stackprof.metadata);
 
-    if (RTEST(_stackprof.out))
-	rb_gc_mark(_stackprof.out);
-
     if (_stackprof.frames)
 	st_foreach(_stackprof.frames, frame_mark_i, 0);
 }
@@ -875,7 +856,6 @@ Init_stackprof(void)
     S(raw);
     S(raw_sample_timestamps);
     S(raw_timestamp_deltas);
-    S(out);
     S(metadata);
     S(ignore_gc);
     S(frames);
@@ -910,10 +890,9 @@ Init_stackprof(void)
 
     rb_mStackProf = rb_define_module("StackProf");
     rb_define_singleton_method(rb_mStackProf, "running?", stackprof_running_p, 0);
-    rb_define_singleton_method(rb_mStackProf, "run", stackprof_run, -1);
     rb_define_singleton_method(rb_mStackProf, "start", stackprof_start, -1);
     rb_define_singleton_method(rb_mStackProf, "stop", stackprof_stop, 0);
-    rb_define_singleton_method(rb_mStackProf, "results", stackprof_results, -1);
+    rb_define_singleton_method(rb_mStackProf, "_results", stackprof_results, 1);
     rb_define_singleton_method(rb_mStackProf, "sample", stackprof_sample, 0);
     rb_define_singleton_method(rb_mStackProf, "use_postponed_job!", stackprof_use_postponed_job_l, 0);
 
