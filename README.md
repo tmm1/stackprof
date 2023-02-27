@@ -16,7 +16,7 @@ Inspired heavily by [gperftools](https://code.google.com/p/gperftools/), and wri
 In your Gemfile add:
 
 ```ruby
-gem 'stackprof'
+gem "stackprof"
 ```
 
 Then run `$ bundle install`. Alternatively you can run `$ gem install stackprof`.
@@ -24,15 +24,30 @@ Then run `$ bundle install`. Alternatively you can run `$ gem install stackprof`
 
 ### Run
 
-in ruby:
+The `StackProf.run` method accepts a block with your code to be profiled.
 
 ``` ruby
-StackProf.run(mode: :cpu, out: 'tmp/stackprof-cpu-myapp.dump') do
+StackProf.run(mode: :cpu, out: "tmp/stackprof-cpu-myapp.dump") do
   #...
 end
 ```
 
-via rack:
+The `:out` option specifies where the sample data is written to.
+
+#### Mode
+
+When profiling a less complex code chunk it might be more helpful to switch from `:cpu` mode to `:object`. This is
+advisable when your `:cpu` run doesn't produce any samples.
+
+``` ruby
+StackProf.run(mode: :object, out: "tmp/stackprof-cpu-myapp.dump") do
+  #...
+end
+```
+
+#### Rack
+
+In a Rack application, `stackprof` provides a convenient middleware.
 
 ``` ruby
 use StackProf::Middleware, enabled: true,
@@ -41,7 +56,9 @@ use StackProf::Middleware, enabled: true,
                            save_every: 5
 ```
 
-reporting:
+### Reporting
+
+The file produced by the profiler can be visualized to a human-readable form by using the `stackprof` CLI command.
 
 ```
 $ stackprof tmp/stackprof-cpu-*.dump --text --limit 1
