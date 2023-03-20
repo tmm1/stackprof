@@ -12,6 +12,7 @@
 #include <ruby/st.h>
 #include <ruby/io.h>
 #include <ruby/intern.h>
+#include <ruby/vm.h>
 #include <signal.h>
 #include <sys/time.h>
 #include <time.h>
@@ -32,6 +33,7 @@ static const char *fake_frame_cstrs[] = {
 };
 
 static int stackprof_use_postponed_job = 1;
+static int ruby_vm_running = 0;
 
 #define TOTAL_FAKE_FRAMES (sizeof(fake_frame_cstrs) / sizeof(char *))
 
@@ -725,6 +727,11 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 
     if (!_stackprof.running) return;
 
+    // There's a possibility that the signal handler is invoked *after* the Ruby
+    // VM has been shut down (e.g. after ruby_cleanup(0)). In this case, things
+    // that rely on global VM state (e.g. rb_during_gc) will segfault.
+    if (!ruby_vm_running) return;
+
     if (_stackprof.mode == sym_wall) {
         // In "wall" mode, the SIGALRM signal will arrive at an arbitrary thread.
         // In order to provide more useful results, especially under threaded web
@@ -845,6 +852,12 @@ stackprof_use_postponed_job_l(VALUE self)
     return Qnil;
 }
 
+static void
+stackprof_at_exit(ruby_vm_t* vm)
+{
+    ruby_vm_running = 0;
+}
+
 void
 Init_stackprof(void)
 {
@@ -854,6 +867,9 @@ Init_stackprof(void)
     * See https://github.com/ruby/ruby/commit/0e276dc458f94d9d79a0f7c7669bde84abe80f21
     */
     stackprof_use_postponed_job = RUBY_API_VERSION_MAJOR < 3;
+
+    ruby_vm_running = 1;
+    ruby_vm_at_exit(stackprof_at_exit);
 
 #define S(name) sym_##name = ID2SYM(rb_intern(#name));
     S(object);
