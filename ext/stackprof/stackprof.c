@@ -811,6 +811,10 @@ stackprof_gc_mark(void *data)
 
     if (_stackprof.frames)
 	st_foreach(_stackprof.frames, frame_mark_i, 0);
+
+    for (int i = 0; i < _stackprof.buffer_count; i++) {
+        rb_gc_mark(_stackprof.frames_buffer[i]);
+    }
 }
 
 static void
