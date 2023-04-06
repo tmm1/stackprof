@@ -1,3 +1,7 @@
+# 0.2.25
+
+* Fix GC marking
+
 # 0.2.16
 
 * [flamegraph.pl] Update to latest version
