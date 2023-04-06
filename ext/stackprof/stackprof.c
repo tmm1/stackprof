@@ -91,6 +91,11 @@ typedef struct {
     int64_t delta_usec;
 } sample_time_t;
 
+typedef struct {
+    st_table *tags;
+} sample_tags_t;
+
+
 static struct {
     int running;
     int raw;
@@ -106,6 +111,11 @@ static struct {
     size_t raw_samples_len;
     size_t raw_samples_capa;
     size_t raw_sample_index;
+
+    sample_tags_t *sample_tag_buffer;
+    sample_tags_t *sample_tags;
+    size_t sample_tags_len;
+    size_t sample_tags_capa;
 
     struct timestamp_t last_sample_at;
     sample_time_t *raw_sample_times;
@@ -136,6 +146,7 @@ static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_
 static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_metadata, sym_frames, sym_ignore_gc, sym_out;
 static VALUE sym_aggregate, sym_raw_sample_timestamps, sym_raw_timestamp_deltas, sym_state, sym_marking, sym_sweeping;
 static VALUE sym_gc_samples, objtracer;
+static VALUE sym_sample_tags, sym_thread_id;
 static VALUE gc_hook;
 static VALUE rb_mStackProf;
 
@@ -189,6 +200,12 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	_stackprof.overall_signals = 0;
 	_stackprof.overall_samples = 0;
 	_stackprof.during_gc = 0;
+    }
+
+    if (!_stackprof.sample_tag_buffer) {
+        _stackprof.sample_tag_buffer = ALLOC_N(sample_tags_t, 1);
+        MEMZERO(_stackprof.sample_tag_buffer, sample_tags_t, 1);
+	_stackprof.sample_tag_buffer->tags = st_init_strtable_with_size(1);
     }
 
     if (mode == sym_object) {
@@ -344,6 +361,16 @@ frame_i(st_data_t key, st_data_t val, st_data_t arg)
     return ST_DELETE;
 }
 
+
+static int
+sample_tags_i(st_data_t key, st_data_t val, st_data_t arg)
+{
+    VALUE tags = (VALUE)arg;
+
+    rb_hash_aset(tags, key, val);
+    return ST_CONTINUE;
+}
+
 static VALUE
 stackprof_results(int argc, VALUE *argv, VALUE self)
 {
@@ -369,6 +396,24 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 
     st_free_table(_stackprof.frames);
     _stackprof.frames = NULL;
+
+
+    VALUE sample_tags;
+    sample_tags = rb_ary_new_capa(_stackprof.sample_tags_len);
+    
+    for (int n = 0; n < _stackprof.sample_tags_len; n++) {
+        VALUE tags = rb_hash_new();
+        st_foreach(_stackprof.sample_tags[n].tags, sample_tags_i, (st_data_t)tags);
+        rb_ary_push(sample_tags, tags);
+    }
+    
+    free(_stackprof.sample_tags);
+    _stackprof.sample_tags = NULL;
+    _stackprof.sample_tags_len = 0;
+    _stackprof.sample_tags_capa = 0;
+    
+    rb_hash_aset(results, sym_sample_tags, sample_tags);
+
 
     if (_stackprof.raw && _stackprof.raw_samples_len) {
 	size_t len, n, o;
@@ -595,6 +640,28 @@ stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t ti
     if (_stackprof.raw) {
 	capture_timestamp(&_stackprof.last_sample_at);
     }
+
+    // Allocate initial tag buffer
+    if (!_stackprof.sample_tags) {
+        _stackprof.sample_tags_capa = 100;
+        _stackprof.sample_tags = malloc(sizeof(sample_tags_t) * _stackprof.sample_tags_capa);
+        _stackprof.sample_tags_len = 0;
+    }
+
+    /* Double the buffer size if it's too small */
+    while (_stackprof.sample_tags_capa <= _stackprof.sample_tags_len + 1) {
+        _stackprof.sample_tags_capa *= 2;
+        _stackprof.sample_tags = realloc(_stackprof.sample_tags, sizeof(sample_tags_t) * _stackprof.sample_tags_capa);
+    }
+
+    sample_tags_t *tag_data;
+    // Copy sample tags from buffer to global
+    tag_data = ALLOC_N(sample_tags_t, 1);
+    MEMZERO(tag_data, sample_tags_t, 1);
+    tag_data->tags = st_copy(_stackprof.sample_tag_buffer->tags);
+  
+    _stackprof.sample_tags[_stackprof.sample_tags_len++] = *tag_data;
+    st_clear(_stackprof.sample_tag_buffer->tags);
 }
 
 // buffer the current profile frames
@@ -624,6 +691,17 @@ stackprof_buffer_sample(void)
     _stackprof.buffer_count = num;
     _stackprof.buffer_time.timestamp_usec = start_timestamp;
     _stackprof.buffer_time.delta_usec = timestamp_delta;
+
+    // TODO read arbitrary tags here based on registered threads, receivers, and symbols to read
+    st_data_t key, val;
+
+    // TODO figure out how to make this a symbol or integer ID into a string table, strings probably expensive here
+    VALUE key_v = rb_sprintf("thread_id"); 
+    VALUE val_v = rb_sprintf("%08lX", PTR2NUM(rb_thread_current()));
+
+    key = (st_data_t) key_v;
+    val = (st_data_t) val_v;
+    st_insert(_stackprof.sample_tag_buffer->tags, key, val);
 }
 
 void
@@ -899,6 +977,8 @@ Init_stackprof(void)
     S(state);
     S(marking);
     S(sweeping);
+    S(sample_tags);
+    S(thread_id);
 #undef S
 
     /* Need to run this to warm the symbol table before we call this during GC */

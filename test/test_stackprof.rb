@@ -295,6 +295,19 @@ class StackProfTest < MiniTest::Test
     end
   end
 
+  def test_results_include_tags
+    profile = StackProf.run(mode: :cpu) do
+      math
+    end
+
+    assert_equal true, profile.key?(:sample_tags)
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], profile[:sample_tags].size
+    assert_equal true, profile[:sample_tags].first.key?("thread_id")
+    #STDERR.puts "PROF #{profile.inspect}"
+  end
+
+
   def math
     250_000.times do
       2 ** 10
