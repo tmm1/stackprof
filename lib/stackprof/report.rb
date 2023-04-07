@@ -616,49 +616,70 @@ module StackProf
     end
 
     def +(other)
-      raise ArgumentError, "cannot combine #{other.class}" unless self.class == other.class
-      raise ArgumentError, "cannot combine #{modeline} with #{other.modeline}" unless modeline == other.modeline
-      raise ArgumentError, "cannot combine v#{version} with v#{other.version}" unless version == other.version
+      merge(other)
+    end
 
-      f1, f2 = normalized_frames, other.normalized_frames
-      frames = (f1.keys + f2.keys).uniq.inject(Hash.new) do |hash, id|
-        if f1[id].nil?
-          hash[id] = f2[id]
-        elsif f2[id]
-          hash[id] = f1[id]
-          hash[id][:total_samples] += f2[id][:total_samples]
-          hash[id][:samples] += f2[id][:samples]
-          if f2[id][:edges]
-            edges = hash[id][:edges] ||= {}
-            f2[id][:edges].each do |edge, weight|
-              edges[edge] ||= 0
-              edges[edge] += weight
-            end
-          end
-          if f2[id][:lines]
-            lines = hash[id][:lines] ||= {}
-            f2[id][:lines].each do |line, weight|
-              lines[line] = add_lines(lines[line], weight)
-            end
-          end
-        else
-          hash[id] = f1[id]
-        end
-        hash
+    def merge(*others)
+      other_class = others.find {|o| o.class != self.class}
+      if other_class
+        raise ArgumentError, "cannot combine #{self.class} with #{other_class}"
       end
 
-      d1, d2 = data, other.data
-      data = {
+      other_modeline = others.find {|o| o.modeline != modeline}
+      if other_modeline
+        raise ArgumentError, "cannot combine #{modeline} with #{other_modeline}"
+      end
+
+      other_version = others.find {|o| o.version != version}
+      if other_version
+        raise ArgumentError, "cannot combine v#{version} with v#{other_version}"
+      end
+
+      all = [self] + others
+      merged = {}
+
+      all.each do |report|
+        report.normalized_frames.each do |id, frame|
+          if !merged[id]
+            merged[id] = frame
+            next
+          end
+
+          merged_frame = merged[id]
+
+          merged_frame[:total_samples] += frame[:total_samples]
+          merged_frame[:samples] += frame[:samples]
+
+          if frame[:edges]
+            merged_edges = (merged_frame[:edges] ||= {})
+            frame[:edges].each do |edge, weight|
+              merged_edges[edge] ||= 0
+              merged_edges[edge] += weight
+            end
+          end
+
+          if frame[:lines]
+            merged_lines = (merged_frame[:lines] ||= {})
+            frame[:lines].each do |line, weight|
+              merged_lines[line] = add_lines(merged_lines[line], weight)
+            end
+          end
+        end
+      end
+
+      all_data = all.map(&:data)
+
+      new_data = {
         version: version,
-        mode: d1[:mode],
-        interval: d1[:interval],
-        samples: d1[:samples] + d2[:samples],
-        gc_samples: d1[:gc_samples] + d2[:gc_samples],
-        missed_samples: d1[:missed_samples] + d2[:missed_samples],
-        frames: frames
+        mode: data[:mode],
+        interval: data[:interval],
+        samples: all_data.map {|d| d[:samples]}.inject(:+),
+        gc_samples: all_data.map {|d| d[:gc_samples]}.inject(:+),
+        missed_samples: all_data.map {|d| d[:missed_samples]}.inject(:+),
+        frames: merged
       }
 
-      self.class.new(data)
+      self.class.new(new_data)
     end
 
     private
