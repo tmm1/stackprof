@@ -307,6 +307,40 @@ class StackProfTest < MiniTest::Test
     #STDERR.puts "PROF #{profile.inspect}"
   end
 
+  def test_read_tags_from_instance_vars
+    main_id = sub_id = ""
+    profile = StackProf.run(mode: :cpu, tag_source: :foo) do
+      main_id = Thread.current.to_s
+      Thread.current[:foo] = "bar"
+      Thread.new do
+        sub_id = Thread.current.to_s
+        Thread.current[:foo] = "baz"
+        math
+      end.join
+      math
+    end
+
+    assert_equal true, profile.key?(:sample_tags)
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], profile[:sample_tags].size
+    assert_equal true, profile[:sample_tags].all? { |t| t.key?("thread_id") }
+
+    # Ensure that each thread had the correct sample tags
+    profile[:sample_tags].each do |tags|
+      if main_id.include? tags["thread_id"]
+        assert_equal true, tags.key?("foo")
+        assert_equal "bar", tags["foo"]
+      elsif sub_id.include? tags["thread_id"]
+        assert_equal true, tags.key?("foo")
+        assert_equal "baz", tags["foo"]
+      else
+        flunk "could not identify #{tags["thread_id"]} as either the main or sub thread"
+      end
+    end
+    STDERR.puts "PROF #{profile.inspect}"
+  end
+
+
 
   def math
     250_000.times do
