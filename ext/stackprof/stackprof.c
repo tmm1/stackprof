@@ -149,7 +149,7 @@ static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_
 static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_metadata, sym_frames, sym_ignore_gc, sym_out;
 static VALUE sym_aggregate, sym_raw_sample_timestamps, sym_raw_timestamp_deltas, sym_state, sym_marking, sym_sweeping;
 static VALUE sym_gc_samples, objtracer;
-static VALUE sym_sample_tags, sym_tag_source, sym_tags, sym_thread_id;
+static VALUE sym_stackprof_tags, sym_sample_tags, sym_tag_source, sym_tags, sym_thread_id;
 static VALUE gc_hook;
 static VALUE rb_mStackProf;
 
@@ -161,7 +161,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 {
     struct sigaction sa;
     struct itimerval timer;
-    VALUE opts = Qnil, mode = Qnil, interval = Qnil, metadata = rb_hash_new(), out = Qfalse, tag_source, tags = Qnil;
+    VALUE opts = Qnil, mode = Qnil, interval = Qnil, metadata = rb_hash_new(), out = Qfalse, tag_source = Qnil, tags = Qnil;
     int ignore_gc = 0;
     int raw = 0, aggregate = 1;
     VALUE metadata_val;
@@ -197,6 +197,8 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	    tag_source = rb_hash_aref(opts, sym_tag_source);
 	    if (!RB_TYPE_P(tag_source, T_SYMBOL))
 		rb_raise(rb_eArgError, "tag source should be the symbol of a fiber local variable to check for tags. Tags should be keyed by a symbol, and the value should be a string or a symbol");
+	} else {
+	    tag_source = sym_stackprof_tags;
 	}
 
 	if (RTEST(rb_hash_aref(opts, sym_tags))) {
@@ -391,9 +393,7 @@ sample_tags_i(st_data_t key, st_data_t val, st_data_t arg)
 	return ST_CONTINUE;
     }
 
-    // TODO figure out why this sometimes crashes!
     rb_hash_aset(tags, key, val);
-    //printf(" TAG_I");
     return ST_CONTINUE;
 }
 
@@ -429,9 +429,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     
     for (size_t n = 0; n < _stackprof.sample_tags_len; n++) {
         VALUE tags = rb_hash_new();
-        // printf("Sample %d", n);
         st_foreach(_stackprof.sample_tags[n].tags, sample_tags_i, (st_data_t)tags);
-        // printf("\n");
         rb_ary_push(sample_tags, tags);
     }
     
@@ -440,6 +438,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     _stackprof.sample_tags_len = 0;
     _stackprof.sample_tags_capa = 0;
     _stackprof.tag_source = Qnil;
+    _stackprof.tags = Qnil;
     
     rb_hash_aset(results, sym_sample_tags, sample_tags);
 
@@ -693,6 +692,65 @@ stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t ti
     st_clear(_stackprof.sample_tag_buffer->tags);
 }
 
+static void
+stackprof_tag_thread(VALUE *current_thread)
+{
+    VALUE cname = rb_class_path(rb_obj_class(*current_thread));
+    VALUE thread_v = rb_sprintf("#<%"PRIsVALUE":%p", cname, (void *)*current_thread);
+
+    if (!NIL_P(thread_v)) {
+	st_insert(_stackprof.sample_tag_buffer->tags, (st_data_t) sym_thread_id, (st_data_t) thread_v);
+    }
+}
+
+/*
+stackprof_buffer_tags collects tags from a fiber local variable if it is present.
+
+The tags must be specified to stackprof start to initiate collection.
+
+:thread_id is a special tag that will read the thread ID per its string representation
+
+Otherwise, any other tags will be read from a fiber-local variable:
+
+:stackprof_tags
+
+Which may be overridden by passing :tag_source to Stackprof.run
+
+Any tags collected are stored in a pre-allocated buffer, to be recorded later.
+*/
+static void
+stackprof_buffer_tags(void)
+{
+    VALUE tag, tagval, fiber_local_var = Qnil;
+    VALUE current_thread =  rb_thread_current();
+    if(NIL_P(current_thread)) return;
+
+    // Buffer all requested tags. Overhead increases with the cardinality of the set of tags to record
+    for(long n = 0; n <  RARRAY_LEN(_stackprof.tags); n++) {
+	tag= rb_ary_entry(_stackprof.tags, n);
+	if (!RB_TYPE_P(tag, T_SYMBOL)) continue;
+
+	if (tag == sym_thread_id) {
+	    stackprof_tag_thread(&current_thread);
+	    continue;
+	} else {
+	    if (!RTEST(_stackprof.tag_source)) continue;
+	    ID id = rb_check_id(&_stackprof.tag_source);
+	    if (!id) continue;
+
+	    if (NIL_P(fiber_local_var))
+		fiber_local_var = rb_thread_local_aref(current_thread, id);
+
+	    if (!RB_TYPE_P(fiber_local_var, T_HASH)) continue;
+
+	    tagval = rb_hash_aref(fiber_local_var, tag);
+	    if (!RB_TYPE_P(tagval, T_SYMBOL) && !RB_TYPE_P(tagval, T_STRING)) continue;
+
+	    st_insert(_stackprof.sample_tag_buffer->tags, (st_data_t) tag, (st_data_t) tagval);
+	}
+    }
+}
+
 // buffer the current profile frames
 // This must be async-signal-safe
 // Returns immediately if another set of frames are already in the buffer
@@ -721,45 +779,8 @@ stackprof_buffer_sample(void)
     _stackprof.buffer_time.timestamp_usec = start_timestamp;
     _stackprof.buffer_time.delta_usec = timestamp_delta;
 
-
-    // Return early if there are no tags to collect
-    if (NIL_P(_stackprof.tag_source) && NIL_P(_stackprof.tags))
-	return;
-
-    // WORK IN PROGRESS --- trying to add the ability to collect thread (fiber?) local variables based on registered
-    VALUE current_thread =  rb_thread_current();
-
-    if(!NIL_P(current_thread)) {
-        VALUE cname = rb_class_path(rb_obj_class(current_thread));
-
-	// TODO - make this conditional on passing a special tag :thread_id  to Stackprof.start
-	// Always store the thread ID as a tag, so we can convert to Gecko
-	VALUE thread_k = sym_thread_id; // FIXME figure out how to make this a symbol or integer ID into a string table, strings probably expensive here
-	VALUE thread_v = rb_sprintf("#<%"PRIsVALUE":%p", cname, (void *)current_thread);
-	if (!NIL_P(thread_k) && !NIL_P(thread_v)) {
-	    st_data_t key, val;
-	    key = (st_data_t) thread_k;
-	    val = (st_data_t) thread_v;
-	    st_insert(_stackprof.sample_tag_buffer->tags, key, val);
-	}
-
-	if (RTEST(_stackprof.tag_source) && RB_TYPE_P(_stackprof.tags, T_ARRAY)) {
-	    ID id = rb_check_id(&_stackprof.tag_source);
-	    if (!id) return;
-	    VALUE thread_var = rb_thread_local_aref(current_thread, id);
-	    if (RB_TYPE_P(thread_var, T_HASH)) {
-		for(long n = 0; n <  RARRAY_LEN(_stackprof.tags); n++) {
-		    VALUE tag = rb_ary_entry(_stackprof.tags, n);
-		    if (RB_TYPE_P(tag, T_SYMBOL)) {
-			VALUE tagval = rb_hash_aref(thread_var, tag);
-			if (RB_TYPE_P(tagval, T_SYMBOL))
-	        	    st_insert(_stackprof.sample_tag_buffer->tags, (st_data_t) tag, (st_data_t) tagval);
-		    }
-		}
-		
-	    }
-	}
-    }
+    if (RB_TYPE_P(_stackprof.tags, T_ARRAY) && RARRAY_LEN(_stackprof.tags) > 0 )
+	stackprof_buffer_tags();
 }
 
 void
@@ -1035,6 +1056,7 @@ Init_stackprof(void)
     S(state);
     S(marking);
     S(sweeping);
+    S(stackprof_tags);
     S(sample_tags);
     S(tag_source);
     S(tags);

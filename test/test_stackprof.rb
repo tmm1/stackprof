@@ -11,7 +11,7 @@ class StackProfTest < MiniTest::Test
 
   def test_info
     profile = StackProf.run{}
-    assert_equal 1.2, profile[:version]
+    assert_equal 1.3, profile[:version]
     assert_equal :wall, profile[:mode]
     assert_equal 1000, profile[:interval]
     assert_equal 0, profile[:samples]
@@ -295,20 +295,21 @@ class StackProfTest < MiniTest::Test
     end
   end
 
-  def test_results_include_tags
-    profile = StackProf.run(mode: :cpu) do
+  def test_tag_thread_id
+    profile = StackProf.run(mode: :cpu, tags: [:thread_id]) do
       math
     end
 
     assert_equal true, profile.key?(:sample_tags)
     assert_operator profile[:sample_tags].size, :>, 0
     assert_equal profile[:samples], profile[:sample_tags].size
-    assert_equal true, profile[:sample_tags].first.key?(:thread_id)
+    #STDERR.puts "PROF #{profile.inspect}"
+    assert_equal true, profile[:sample_tags].all? { |t| Thread.current.to_s.include?(t[:thread_id])}
   end
 
-  def test_read_tags_from_instance_vars
+  def test_tag_sample_from_tag_source_with_multiple_threads
     main_id = sub_id = ""
-    profile = StackProf.run(mode: :cpu, tag_source: :stackprof_tags, tags: [:foo]) do
+    profile = StackProf.run(mode: :cpu, tags: [:thread_id, :foo]) do
       main_id = Thread.current.to_s
       Thread.current[:stackprof_tags] = {foo: :bar}
       Thread.new do
@@ -324,7 +325,8 @@ class StackProfTest < MiniTest::Test
     assert_equal profile[:samples], profile[:sample_tags].size
     assert_equal true, profile[:sample_tags].all? { |t| t.key?(:thread_id) }
 
-    STDERR.puts "PROF #{profile.inspect}"
+    #STDERR.puts "PROF #{profile.inspect}"
+
     # Ensure that each thread had the correct sample tags
     profile[:sample_tags].each do |tags|
       if main_id.include? tags[:thread_id]
@@ -334,12 +336,38 @@ class StackProfTest < MiniTest::Test
         assert_equal true, tags.key?(:foo)
         assert_equal :baz, tags[:foo]
       else
-        flunk "could not identify #{tags["thread_id"]} as either the main or sub thread"
+        flunk "could not identify #{tags[:thread_id]} as either the main (#{main_id}) or sub (#{sub_id}) thread"
       end
     end
   end
 
+  def test_tag_sample_from_custom_tag_source
+    custom_tag_source = :my_custom_tag_source
+    Thread.current[custom_tag_source] = {foo: :bar}
+    profile = StackProf.run(mode: :cpu, tags: [:foo], tag_source: custom_tag_source) do
+      math
+    end
 
+    assert_equal true, profile.key?(:sample_tags)
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], profile[:sample_tags].size
+    assert_equal true, profile[:sample_tags].all? { |t| t[:foo] == :bar }
+  end
+
+  def test_tag_sample_with_symbol_or_string
+    Thread.current[:stackprof_tags] = {foo: :bar, spam: "a lot"}
+
+    profile = StackProf.run(mode: :cpu, tags: [:foo, :spam]) do
+      math
+    end
+
+    assert_equal true, profile.key?(:sample_tags)
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], profile[:sample_tags].size
+    #STDERR.puts "PROF #{profile.inspect}"
+    assert_equal true, profile[:sample_tags].all? { |t| t[:foo] == :bar }
+    assert_equal true, profile[:sample_tags].all? { |t| t[:spam] == "a lot" }
+  end
 
   def math
     250_000.times do
