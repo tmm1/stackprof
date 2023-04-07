@@ -112,18 +112,20 @@ static struct {
     size_t raw_samples_capa;
     size_t raw_sample_index;
 
+    VALUE tags;
     VALUE tag_source;
     sample_tags_t *sample_tag_buffer;
     sample_tags_t *sample_tags;
+    st_table *tag_string_table;
+    char **tag_strings;
+    size_t tag_strings_len;
     size_t sample_tags_len;
     size_t sample_tags_capa;
 
-    VALUE tags;
     struct timestamp_t last_sample_at;
     sample_time_t *raw_sample_times;
     size_t raw_sample_times_len;
     size_t raw_sample_times_capa;
-    //st_table *tag_strings; // TODO implement a string table of tags to reduce space usage, so we can only store string table offsets for tag values.
 
     size_t overall_signals;
     size_t overall_samples;
@@ -557,6 +559,36 @@ st_numtable_increment(st_table *table, st_data_t key, size_t increment)
     st_update(table, key, numtable_increment_callback, (st_data_t)increment);
 }
 
+static int
+index_tag_i(st_data_t key, st_data_t val, st_data_t arg)
+{
+    st_table *tags = (st_table *)arg;
+
+    if (tags == NULL || !RTEST(key) || !RTEST(val)) {
+	return ST_CONTINUE;
+    }
+
+    /* TODO
+
+    - initialize the string table and string array buffer
+    - Look up key and value in the tag_string_table quickly
+    - If they are found, store the resulting integer
+    - If they are not found, add them to the back of tag_strings
+	- grow buffer if necessary using convention of doubling, starting at 100
+	- store result in string table
+    - Update results to also output the string table as an array of strings
+    - Update tests to dereference tags correctly
+    */
+
+    //st_table *tag_string_table;
+    //char *tag_strings[];
+    //size_t tag_strings_capa;
+    //size_t tag_strings_len;
+
+    st_insert(tags, (st_data_t) key, (st_data_t) val);
+    return ST_CONTINUE;
+}
+
 void
 stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t timestamp_delta)
 {
@@ -686,7 +718,10 @@ stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t ti
     sample_tags_t *tag_data;
     tag_data = ALLOC_N(sample_tags_t, 1);
     MEMZERO(tag_data, sample_tags_t, 1);
-    tag_data->tags = st_copy(_stackprof.sample_tag_buffer->tags);
+    tag_data->tags = st_init_numtable();
+
+    // TODO instead of copying, iterate over buffer and convert to string table entries for both key and value
+    st_foreach(_stackprof.sample_tag_buffer->tags, index_tag_i, (st_data_t)tag_data->tags);
   
     _stackprof.sample_tags[_stackprof.sample_tags_len++] = *tag_data;
     st_clear(_stackprof.sample_tag_buffer->tags);
