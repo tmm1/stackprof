@@ -118,10 +118,12 @@ static struct {
     size_t sample_tags_len;
     size_t sample_tags_capa;
 
+    VALUE tags;
     struct timestamp_t last_sample_at;
     sample_time_t *raw_sample_times;
     size_t raw_sample_times_len;
     size_t raw_sample_times_capa;
+    //st_table *tag_strings; // TODO implement a string table of tags to reduce space usage, so we can only store string table offsets for tag values.
 
     size_t overall_signals;
     size_t overall_samples;
@@ -147,7 +149,7 @@ static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_
 static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_metadata, sym_frames, sym_ignore_gc, sym_out;
 static VALUE sym_aggregate, sym_raw_sample_timestamps, sym_raw_timestamp_deltas, sym_state, sym_marking, sym_sweeping;
 static VALUE sym_gc_samples, objtracer;
-static VALUE sym_sample_tags, sym_tag_source, sym_thread_id;
+static VALUE sym_sample_tags, sym_tag_source, sym_tags, sym_thread_id;
 static VALUE gc_hook;
 static VALUE rb_mStackProf;
 
@@ -159,7 +161,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 {
     struct sigaction sa;
     struct itimerval timer;
-    VALUE opts = Qnil, mode = Qnil, interval = Qnil, metadata = rb_hash_new(), out = Qfalse, tag_source = Qnil;
+    VALUE opts = Qnil, mode = Qnil, interval = Qnil, metadata = rb_hash_new(), out = Qfalse, tag_source, tags = Qnil;
     int ignore_gc = 0;
     int raw = 0, aggregate = 1;
     VALUE metadata_val;
@@ -190,7 +192,20 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	if (rb_hash_lookup2(opts, sym_aggregate, Qundef) == Qfalse)
 	    aggregate = 0;
 
-	tag_source = rb_hash_aref(opts, sym_tag_source);
+
+	if (RTEST(rb_hash_aref(opts, sym_tag_source))) {
+	    tag_source = rb_hash_aref(opts, sym_tag_source);
+	    if (!RB_TYPE_P(tag_source, T_SYMBOL))
+		rb_raise(rb_eArgError, "tag source should be the symbol of a fiber local variable to check for tags. Tags should be keyed by a symbol, and the value should be a string or a symbol");
+	}
+
+	if (RTEST(rb_hash_aref(opts, sym_tags))) {
+	    tags = rb_hash_aref(opts, sym_tags);
+	    if (!RB_TYPE_P(tags, T_ARRAY))
+		rb_raise(rb_eArgError, "tags should be an array of symbols"); // TODO validate all elements are symbols
+	}
+
+	tags = rb_hash_aref(opts, sym_tags);
     }
     if (!RTEST(mode)) mode = sym_wall;
 
@@ -245,6 +260,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.out = out;
     _stackprof.target_thread = pthread_self();
     _stackprof.tag_source = tag_source;
+    _stackprof.tags = tags;
 
     if (raw) {
 	capture_timestamp(&_stackprof.last_sample_at);
@@ -377,7 +393,7 @@ sample_tags_i(st_data_t key, st_data_t val, st_data_t arg)
 
     // TODO figure out why this sometimes crashes!
     rb_hash_aset(tags, key, val);
-    printf(" TAG_I");
+    //printf(" TAG_I");
     return ST_CONTINUE;
 }
 
@@ -413,9 +429,9 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     
     for (size_t n = 0; n < _stackprof.sample_tags_len; n++) {
         VALUE tags = rb_hash_new();
-        printf("Sample %d", n);
+        // printf("Sample %d", n);
         st_foreach(_stackprof.sample_tags[n].tags, sample_tags_i, (st_data_t)tags);
-        printf("\n");
+        // printf("\n");
         rb_ary_push(sample_tags, tags);
     }
     
@@ -667,10 +683,10 @@ stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t ti
         _stackprof.sample_tags = realloc(_stackprof.sample_tags, sizeof(sample_tags_t) * _stackprof.sample_tags_capa);
     }
 
+    // Copy sample tags from buffer to accumulator
     sample_tags_t *tag_data;
-    // Copy sample tags from buffer to global
-    tag_data = ALLOC_N(sample_tags_t, 2);
-    MEMZERO(tag_data, sample_tags_t, 2);
+    tag_data = ALLOC_N(sample_tags_t, 1);
+    MEMZERO(tag_data, sample_tags_t, 1);
     tag_data->tags = st_copy(_stackprof.sample_tag_buffer->tags);
   
     _stackprof.sample_tags[_stackprof.sample_tags_len++] = *tag_data;
@@ -706,8 +722,9 @@ stackprof_buffer_sample(void)
     _stackprof.buffer_time.delta_usec = timestamp_delta;
 
 
-    // TODO add an early return if we aren't collecting tags
-    // IDEA - if a top level tag key isn't set, bail out?
+    // Return early if there are no tags to collect
+    if (NIL_P(_stackprof.tag_source) && NIL_P(_stackprof.tags))
+	return;
 
     // WORK IN PROGRESS --- trying to add the ability to collect thread (fiber?) local variables based on registered
     VALUE current_thread =  rb_thread_current();
@@ -715,8 +732,9 @@ stackprof_buffer_sample(void)
     if(!NIL_P(current_thread)) {
         VALUE cname = rb_class_path(rb_obj_class(current_thread));
 
+	// TODO - make this conditional on passing a special tag :thread_id  to Stackprof.start
 	// Always store the thread ID as a tag, so we can convert to Gecko
-	VALUE thread_k = rb_sprintf("thread_id"); // FIXME figure out how to make this a symbol or integer ID into a string table, strings probably expensive here
+	VALUE thread_k = sym_thread_id; // FIXME figure out how to make this a symbol or integer ID into a string table, strings probably expensive here
 	VALUE thread_v = rb_sprintf("#<%"PRIsVALUE":%p", cname, (void *)current_thread);
 	if (!NIL_P(thread_k) && !NIL_P(thread_v)) {
 	    st_data_t key, val;
@@ -725,24 +743,20 @@ stackprof_buffer_sample(void)
 	    st_insert(_stackprof.sample_tag_buffer->tags, key, val);
 	}
 
-	// TODO instead of reading from tag_source, figure out how to access Thread.current[:vars] from C ruby
-	// repurpose tag_source to be a symbol that points to a ruby hash to read the values from, eg
-	// hash = Thread.current[:SYMBOL_SOURCE]
-	// hash[:sym] // read this for each of the specified symbols on each sample
-	if (RTEST(_stackprof.tag_source)) {
+	if (RTEST(_stackprof.tag_source) && RB_TYPE_P(_stackprof.tags, T_ARRAY)) {
 	    ID id = rb_check_id(&_stackprof.tag_source);
 	    if (!id) return;
 	    VALUE thread_var = rb_thread_local_aref(current_thread, id);
-
-	    printf("HERE\n");
-	    if(RTEST(thread_var)) {
-		st_data_t k, v;
-		k = (st_data_t) rb_str_new_cstr(rb_id2name(id));
-		v = (st_data_t) thread_var;
-	        printf("%s: %s\n", rb_id2name(id), StringValueCStr(thread_var));
-	        st_insert(_stackprof.sample_tag_buffer->tags, k, v);
-	    } else {
-	        printf("NIL\n");
+	    if (RB_TYPE_P(thread_var, T_HASH)) {
+		for(long n = 0; n <  RARRAY_LEN(_stackprof.tags); n++) {
+		    VALUE tag = rb_ary_entry(_stackprof.tags, n);
+		    if (RB_TYPE_P(tag, T_SYMBOL)) {
+			VALUE tagval = rb_hash_aref(thread_var, tag);
+			if (RB_TYPE_P(tagval, T_SYMBOL))
+	        	    st_insert(_stackprof.sample_tag_buffer->tags, (st_data_t) tag, (st_data_t) tagval);
+		    }
+		}
+		
 	    }
 	}
     }
@@ -1023,6 +1037,7 @@ Init_stackprof(void)
     S(sweeping);
     S(sample_tags);
     S(tag_source);
+    S(tags);
     S(thread_id);
 #undef S
 
