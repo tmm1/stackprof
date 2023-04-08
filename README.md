@@ -346,7 +346,6 @@ profile = StackProf.run(mode: :cpu, tags: [:foo]) do
   StackProf::Tag.with(foo: :bar) do
     math
   end
-  StackProf::Tag.clear
   math
 end
 ```

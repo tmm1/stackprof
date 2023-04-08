@@ -314,7 +314,6 @@ class StackProfTest < MiniTest::Test
       StackProf::Tag.with(foo: :bar) do
         math
       end
-      StackProf::Tag.clear
       math
     end
     #STDERR.puts "PROF #{profile[:sample_tags].inspect}"
