@@ -95,7 +95,6 @@ typedef struct {
     st_table *tags;
 } sample_tags_t;
 
-
 static struct {
     int running;
     int raw;
@@ -194,7 +193,6 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	    raw = 1;
 	if (rb_hash_lookup2(opts, sym_aggregate, Qundef) == Qfalse)
 	    aggregate = 0;
-
 
 	if (RTEST(rb_hash_aref(opts, sym_tag_source))) {
 	    tag_source = rb_hash_aref(opts, sym_tag_source);
@@ -390,7 +388,6 @@ frame_i(st_data_t key, st_data_t val, st_data_t arg)
     return ST_DELETE;
 }
 
-
 static int
 sample_tags_i(st_data_t key, st_data_t val, st_data_t arg)
 {
@@ -408,6 +405,7 @@ static VALUE
 stackprof_results(int argc, VALUE *argv, VALUE self)
 {
     VALUE results, frames;
+    VALUE sample_tags;
 
     if (!_stackprof.frames || _stackprof.running)
 	return Qnil;
@@ -430,8 +428,6 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     st_free_table(_stackprof.frames);
     _stackprof.frames = NULL;
 
-
-    VALUE sample_tags;
     sample_tags = rb_ary_new_capa(_stackprof.sample_tags_len);
     
     for (size_t n = 0; n < _stackprof.sample_tags_len; n++) {
@@ -449,7 +445,6 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     _stackprof.tag_thread_id = Qfalse;
     
     rb_hash_aset(results, sym_sample_tags, sample_tags);
-
 
     if (_stackprof.raw && _stackprof.raw_samples_len) {
 	size_t len, n, o;
