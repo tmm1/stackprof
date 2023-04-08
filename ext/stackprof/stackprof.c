@@ -151,7 +151,7 @@ static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_
 static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_metadata, sym_frames, sym_ignore_gc, sym_out;
 static VALUE sym_aggregate, sym_raw_sample_timestamps, sym_raw_timestamp_deltas, sym_state, sym_marking, sym_sweeping;
 static VALUE sym_gc_samples, objtracer;
-static VALUE sym_stackprof_tags, sym_sample_tags, sym_tag_source, sym_tags, sym_thread_id;
+static VALUE sym__stackprof_tags, sym_sample_tags, sym_tag_source, sym_tags, sym_thread_id;
 static VALUE gc_hook;
 static VALUE rb_mStackProf;
 
@@ -200,7 +200,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	    if (!RB_TYPE_P(tag_source, T_SYMBOL))
 		rb_raise(rb_eArgError, "tag source should be the symbol of a fiber local variable to check for tags. Tags should be keyed by a symbol, and the value should be a string or a symbol");
 	} else {
-	    tag_source = sym_stackprof_tags;
+	    tag_source = sym__stackprof_tags;
 	}
 
 	if (RTEST(rb_hash_aref(opts, sym_tags))) {
@@ -763,6 +763,8 @@ stackprof_buffer_tags(void)
 	tag= rb_ary_entry(_stackprof.tags, n);
 	if (!RB_TYPE_P(tag, T_SYMBOL)) continue;
 
+	// FIXME pull this out of the loop so we can replace these continues below with returns to eliminate busy work
+	// see if there is a way to check if sym_thread_id is in the array
 	if (tag == sym_thread_id) {
 	    stackprof_tag_thread(&current_thread);
 	    continue;
@@ -811,6 +813,22 @@ stackprof_buffer_sample(void)
     _stackprof.buffer_count = num;
     _stackprof.buffer_time.timestamp_usec = start_timestamp;
     _stackprof.buffer_time.delta_usec = timestamp_delta;
+
+    /*
+	TODO for debug purposes, add an option to toggle accumulating the overhead in microseconds
+	of both parsing tags and capturing the stack frames above in two separate
+	integers. They should both show the total overhead of sample collection.
+
+	This will be useful in gauging what the overhead is of tag collection
+	and if it is significant, compared to the overhead of ruby providing
+	the callchain to use.
+    */
+
+    //struct timestamp_t t;
+    //capture_timestamp(&t);
+    //start_timestamp = timestamp_usec(&t);
+    //timestamp_delta = delta_usec(&_stackprof.last_sample_at, &t);
+
 
     if (RB_TYPE_P(_stackprof.tags, T_ARRAY) && RARRAY_LEN(_stackprof.tags) > 0 )
 	stackprof_buffer_tags();
@@ -1089,11 +1107,11 @@ Init_stackprof(void)
     S(state);
     S(marking);
     S(sweeping);
-    S(stackprof_tags);
     S(sample_tags);
     S(tag_source);
     S(tags);
     S(thread_id);
+    S(_stackprof_tags);
 #undef S
 
     /* Need to run this to warm the symbol table before we call this during GC */
@@ -1127,6 +1145,7 @@ Init_stackprof(void)
     rb_define_singleton_method(rb_mStackProf, "results", stackprof_results, -1);
     rb_define_singleton_method(rb_mStackProf, "sample", stackprof_sample, 0);
     rb_define_singleton_method(rb_mStackProf, "use_postponed_job!", stackprof_use_postponed_job_l, 0);
+    rb_define_const(rb_mStackProf, "DEFAULT_TAG_SOURCE", sym__stackprof_tags); // TODO define this on StackProf::Tag
 
     pthread_atfork(stackprof_atfork_prepare, stackprof_atfork_parent, stackprof_atfork_child);
 }
