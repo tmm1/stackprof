@@ -303,20 +303,21 @@ class StackProfTest < MiniTest::Test
     assert_equal true, profile.key?(:sample_tags)
     assert_operator profile[:sample_tags].size, :>, 0
     assert_equal profile[:samples], profile[:sample_tags].size
-    #STDERR.puts "PROF #{profile.inspect}"
     assert_equal true, profile[:sample_tags].all? { |t| Thread.current.to_s.include?(t[:thread_id])}
   end
 
   def test_tag_sample_from_tag_source_with_multiple_threads
     main_id = sub_id = ""
     profile = StackProf.run(mode: :cpu, tags: [:thread_id, :foo]) do
-      main_id = Thread.current.to_s
+      main_id = parse_thread_id(Thread.current)
       Thread.current[:stackprof_tags] = {foo: :bar}
       Thread.new do
-        sub_id = Thread.current.to_s
+        sub_id = parse_thread_id(Thread.current)
         Thread.current[:stackprof_tags] = {foo: :baz}
         math
       end.join
+      math
+      Thread.current[:stackprof_tags] = {}
       math
     end
 
@@ -325,20 +326,8 @@ class StackProfTest < MiniTest::Test
     assert_equal profile[:samples], profile[:sample_tags].size
     assert_equal true, profile[:sample_tags].all? { |t| t.key?(:thread_id) }
 
-    #STDERR.puts "PROF #{profile.inspect}"
-
-    # Ensure that each thread had the correct sample tags
-    profile[:sample_tags].each do |tags|
-      if main_id.include? tags[:thread_id]
-        assert_equal true, tags.key?(:foo)
-        assert_equal :bar, tags[:foo]
-      elsif sub_id.include? tags[:thread_id]
-        assert_equal true, tags.key?(:foo)
-        assert_equal :baz, tags[:foo]
-      else
-        flunk "could not identify #{tags[:thread_id]} as either the main (#{main_id}) or sub (#{sub_id}) thread"
-      end
-    end
+    #STDERR.puts "PROF #{profile[:sample_tags].inspect}"
+    assert_equal true, tag_order_matches(profile, [{thread_id: sub_id, foo: :baz}, {thread_id: main_id, foo: :bar}, {thread_id: main_id}])
   end
 
   def test_tag_sample_from_custom_tag_source
@@ -364,9 +353,29 @@ class StackProfTest < MiniTest::Test
     assert_equal true, profile.key?(:sample_tags)
     assert_operator profile[:sample_tags].size, :>, 0
     assert_equal profile[:samples], profile[:sample_tags].size
-    #STDERR.puts "PROF #{profile.inspect}"
     assert_equal true, profile[:sample_tags].all? { |t| t[:foo] == :bar }
     assert_equal true, profile[:sample_tags].all? { |t| t[:spam] == "a lot" }
+  end
+
+  def parse_thread_id(thread)
+    thread.to_s.scan(/#<Thread:(.*?)\s.*>/).flatten.first
+  end
+
+  def tag_order_matches(profile, order)
+    return false if order.size < 1
+    idx = 0
+    acceptable = nil
+    profile.fetch(:sample_tags, []).each do |tags|
+      acceptable = order[idx]
+      if tags != acceptable && idx < order.size
+        idx = idx + 1
+        next_acceptable = order[idx]
+        #STDERR.puts "HERE #{tags} != #{acceptable}, trying #{next_acceptable}"
+        return false if tags != next_acceptable
+        acceptable = next_acceptable
+      end
+    end
+    return idx == (order.size - 1)
   end
 
   def math

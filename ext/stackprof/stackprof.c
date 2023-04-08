@@ -730,12 +730,10 @@ stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t ti
 static void
 stackprof_tag_thread(VALUE *current_thread)
 {
-    VALUE cname = rb_class_path(rb_obj_class(*current_thread));
-    VALUE thread_v = rb_sprintf("#<%"PRIsVALUE":%p", cname, (void *)*current_thread);
+    VALUE thread_id = rb_sprintf("%p", (void *)*current_thread);
 
-    if (!NIL_P(thread_v)) {
-	st_insert(_stackprof.sample_tag_buffer->tags, (st_data_t) sym_thread_id, (st_data_t) thread_v);
-    }
+    if (RTEST(thread_id))
+	st_insert(_stackprof.sample_tag_buffer->tags, (st_data_t) sym_thread_id, (st_data_t) thread_id);
 }
 
 /*
