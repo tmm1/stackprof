@@ -301,22 +301,23 @@ class StackProfTest < MiniTest::Test
 
   def test_tag_thread_id
     profile = StackProf.run(mode: :cpu, tags: [:thread_id]) do
-      math
+      100.times { math }
     end
 
     assert_equal true, profile.key?(:sample_tags)
     assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal true, profile[:sample_tags].all? { |t| t.key?(:thread_id)}
     assert_equal true, profile[:sample_tags].all? { |t| Thread.current.to_s.include?(t[:thread_id])}
   end
 
   def test_tag_with_helper
     profile = StackProf.run(mode: :cpu, tags: [:foo]) do
-      math
+      10.times { math }
       StackProf::Tag.with(foo: :bar) do
-        math
+        10.times { math }
       end
-      math
+      10.times { math }
     end
     #STDERR.puts "PROF #{profile[:sample_tags].inspect}"
     assert_equal true, profile.key?(:sample_tags)
@@ -333,11 +334,11 @@ class StackProfTest < MiniTest::Test
       Thread.new do
         sub_id = parse_thread_id(Thread.current)
         StackProf::Tag.set(foo: :baz)
-        math
+        10.times { math }
       end.join
-      math
+      10.times { math }
       StackProf::Tag.clear
-      math
+      10.times { math }
     end
 
     assert_equal true, profile.key?(:sample_tags)
@@ -345,7 +346,6 @@ class StackProfTest < MiniTest::Test
     assert_operator profile[:sample_tags].size, :>, 0
     assert_equal true, profile[:sample_tags].all? { |t| t.key?(:thread_id) }
 
-    #STDERR.puts "PROF #{profile[:sample_tags].inspect}"
     assert_equal true, tag_order_matches(profile, [{thread_id: sub_id, foo: :baz}, {thread_id: main_id, foo: :bar}, {thread_id: main_id}])
   end
 
@@ -354,24 +354,25 @@ class StackProfTest < MiniTest::Test
     main_id = sub_id = ""
     profile = StackProf.run(mode: :cpu, tags: [:foo, :spam]) do
       main_id = parse_thread_id(Thread.current)
-      math
+      10.times { math }
       StackProf::Tag.with(foo: :bar) do
-        math
+        10.times { math }
         StackProf::Tag.with(foo: :baz) do
-          math
+          10.times { math }
           StackProf::Tag.with(spam: :eggs) do
-            math
+            10.times { math }
           end
-          math
+          10.times { math }
         end
-        math
+        10.times { math }
       end
-      math
+      10.times { math }
     end
 
     assert_equal true, profile.key?(:sample_tags)
     assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
+    #STDERR.puts "PROF #{profile[:sample_tags].inspect}"
     assert_equal true, tag_order_matches(profile, [{}, {foo: :bar}, {foo: :baz}, {foo: :baz, spam: :eggs}, {foo: :baz}, {foo: :bar}, {}])
   end
 
@@ -404,7 +405,7 @@ class StackProfTest < MiniTest::Test
     custom_tag_source = :my_custom_tag_source
     StackProf::Tag.set(foo: :bar, tag_source: custom_tag_source)
     profile = StackProf.run(mode: :cpu, tags: [:foo], tag_source: custom_tag_source) do
-      math
+      10.times { math }
     end
 
     assert_equal true, profile.key?(:sample_tags)
@@ -417,7 +418,7 @@ class StackProfTest < MiniTest::Test
     StackProf::Tag.set(foo: :bar, spam: "a lot")
 
     profile = StackProf.run(mode: :cpu, tags: [:foo, :spam]) do
-      math
+      10.times { math }
     end
 
     assert_equal true, profile.key?(:sample_tags)
