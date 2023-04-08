@@ -324,6 +324,53 @@ StackProf.stop
 StackProf.results('/tmp/some.file')
 ```
 
+## Tagging samples
+
+It may be helpful to capture additional metadata while the stackprof interrupt
+is being processed which is relevant to that specific sample, as opposed to the
+global metadata set at the profile level with the `metadata` option. For instance,
+knowing the thread id associated with the stack, or other metadata such as
+the active request id, controller or action name, etc.
+
+This can be achieved by storing String or Symbol variables in a fiber-local
+dictionary. When a sample is collected, a specific list of tags can be checked
+against this tag source. If a value is found, it is recorded and alongside the
+stack trace it collects before exiting from the interrupt. There should be a
+tag set for every sample if any tags are specified to be collected.
+
+For example, the following code:
+
+```ruby
+profile = StackProf.run(mode: :cpu, tags: [:foo]) do
+  math
+  StackProf::Tag.with(foo: :bar) do
+    math
+  end
+  StackProf::Tag.clear
+  math
+end
+```
+
+Will result in tags like:
+
+```
+[{}, {}, {}, {}, {}, {}, {:foo=>:bar}, {:foo=>:bar}, {:foo=>:bar}, {:foo=>:bar}, {}, {}, {}, {}, {}]
+```
+
+When recording with stackprof, the special tag `:thread_id` will record the
+id of the thread that the profile was collected for before recording any other
+tags.
+
+```ruby
+StackProf::Tag.with(foo: :bar, &block) # sets the tag :foo, to value :bar while executing a block, then unsets it
+StackProf::Tag.set(foo: :bar) # sets the tag :foo, to value :bar
+StackProf::Tag.unset(:foo)    # unsets the tag :foo, if set
+StackProf::Tag.clear          # clears all tags
+```
+
+By default, tags are stored in a special variable with the magic name `:_stackprof_tags`.
+This can be overridden by specifying `:tag_source` to any tag related methods.
+
 ## All options
 
 `StackProf.run` accepts an options hash. Currently, the following options are recognized:
@@ -337,6 +384,8 @@ Option      | Meaning
 `aggregate` | Defaults: `true` - if `false` disables [aggregation](#aggregation)
 `raw`       | Defaults `false` - if `true` collects the extra data required by the `--flamegraph` and `--stackcollapse` report types
 `metadata`  | Defaults to `{}`. Must be a `Hash`. metadata associated with this profile
+`tags`      | Defaults to `[]`. Must be an `Array` containing only `Symbol` elements. tags that should be read from the default or specified tag source
+`tag_source`| Defaults to `:_stackprof_tags`. Must be a `Symbol`. this will be identity of the fiber local variable to check for tags
 `save_every`| (Rack middleware only) write the target file after this many requests
 
 ## Todo

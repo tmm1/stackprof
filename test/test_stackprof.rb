@@ -303,7 +303,6 @@ class StackProfTest < MiniTest::Test
     assert_equal true, profile.key?(:sample_tags)
     assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
-    #STDERR.puts "PROF #{profile[:sample_tags].inspect}"
     assert_equal true, profile[:sample_tags].all? { |t| Thread.current.to_s.include?(t[:thread_id])}
   ensure
     StackProf::Tag.clear
@@ -318,7 +317,7 @@ class StackProfTest < MiniTest::Test
       StackProf::Tag.clear
       math
     end
-
+    #STDERR.puts "PROF #{profile[:sample_tags].inspect}"
     assert_equal true, profile.key?(:sample_tags)
     assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
