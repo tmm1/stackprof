@@ -303,7 +303,10 @@ class StackProfTest < MiniTest::Test
     assert_equal true, profile.key?(:sample_tags)
     assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
+    #STDERR.puts "PROF #{profile[:sample_tags].inspect}"
     assert_equal true, profile[:sample_tags].all? { |t| Thread.current.to_s.include?(t[:thread_id])}
+  ensure
+    StackProf::Tag.clear
   end
 
   def test_tag_with_helper
@@ -319,7 +322,6 @@ class StackProfTest < MiniTest::Test
     assert_equal true, profile.key?(:sample_tags)
     assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
-    #STDERR.puts "PROF #{profile[:sample_tags].inspect}"
     assert_equal true, tag_order_matches(profile, [{}, {foo: :bar}, {}])
   ensure
     StackProf::Tag.clear

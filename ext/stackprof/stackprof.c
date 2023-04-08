@@ -114,6 +114,7 @@ static struct {
 
     VALUE tags;
     VALUE tag_source;
+    VALUE tag_thread_id;
     sample_tags_t *sample_tag_buffer;
     sample_tags_t *sample_tags;
     st_table *tag_string_table;
@@ -206,7 +207,11 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	if (RTEST(rb_hash_aref(opts, sym_tags))) {
 	    tags = rb_hash_aref(opts, sym_tags);
 	    if (!RB_TYPE_P(tags, T_ARRAY))
-		rb_raise(rb_eArgError, "tags should be an array of symbols"); // TODO validate all elements are symbols
+		rb_raise(rb_eArgError, "tags should be an array");
+	    if (rb_ary_includes(tags, sym_thread_id)) {
+		rb_ary_delete(tags, sym_thread_id);
+		_stackprof.tag_thread_id = Qtrue;
+	    }
 	}
 
 	tags = rb_hash_aref(opts, sym_tags);
@@ -441,6 +446,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     _stackprof.sample_tags_capa = 0;
     _stackprof.tag_source = Qnil;
     _stackprof.tags = Qnil;
+    _stackprof.tag_thread_id = Qfalse;
     
     rb_hash_aset(results, sym_sample_tags, sample_tags);
 
@@ -758,31 +764,28 @@ stackprof_buffer_tags(void)
     VALUE current_thread =  rb_thread_current();
     if(NIL_P(current_thread)) return;
 
+    if (_stackprof.tag_thread_id) {
+        stackprof_tag_thread(&current_thread);
+    }
+
     // Buffer all requested tags. Overhead increases with the cardinality of the set of tags to record
     for(long n = 0; n <  RARRAY_LEN(_stackprof.tags); n++) {
 	tag= rb_ary_entry(_stackprof.tags, n);
 	if (!RB_TYPE_P(tag, T_SYMBOL)) continue;
 
-	// FIXME pull this out of the loop so we can replace these continues below with returns to eliminate busy work
-	// see if there is a way to check if sym_thread_id is in the array
-	if (tag == sym_thread_id) {
-	    stackprof_tag_thread(&current_thread);
-	    continue;
-	} else {
-	    if (!RTEST(_stackprof.tag_source)) continue;
-	    ID id = rb_check_id(&_stackprof.tag_source);
-	    if (!id) continue;
+	if (!RTEST(_stackprof.tag_source)) return;
+	ID id = rb_check_id(&_stackprof.tag_source);
+	if (!id) return;
 
-	    if (NIL_P(fiber_local_var))
-		fiber_local_var = rb_thread_local_aref(current_thread, id);
+	if (NIL_P(fiber_local_var))
+	    fiber_local_var = rb_thread_local_aref(current_thread, id);
 
-	    if (!RB_TYPE_P(fiber_local_var, T_HASH)) continue;
+	if (!RB_TYPE_P(fiber_local_var, T_HASH)) return;
 
-	    tagval = rb_hash_aref(fiber_local_var, tag);
-	    if (!RB_TYPE_P(tagval, T_SYMBOL) && !RB_TYPE_P(tagval, T_STRING)) continue;
+	tagval = rb_hash_aref(fiber_local_var, tag);
+	if (!RB_TYPE_P(tagval, T_SYMBOL) && !RB_TYPE_P(tagval, T_STRING)) continue;
 
-	    st_insert(_stackprof.sample_tag_buffer->tags, (st_data_t) tag, (st_data_t) tagval);
-	}
+	st_insert(_stackprof.sample_tag_buffer->tags, (st_data_t) tag, (st_data_t) tagval);
     }
 }
 
@@ -830,7 +833,7 @@ stackprof_buffer_sample(void)
     //timestamp_delta = delta_usec(&_stackprof.last_sample_at, &t);
 
 
-    if (RB_TYPE_P(_stackprof.tags, T_ARRAY) && RARRAY_LEN(_stackprof.tags) > 0 )
+    if (_stackprof.tag_thread_id || (RB_TYPE_P(_stackprof.tags, T_ARRAY) && RARRAY_LEN(_stackprof.tags) > 0 ))
 	stackprof_buffer_tags();
 }
 
