@@ -9,6 +9,10 @@ class StackProfTest < MiniTest::Test
     Object.new # warm some caches to avoid flakiness
   end
 
+  def teardown
+    StackProf::Tag.clear
+  end
+
   def test_info
     profile = StackProf.run{}
     assert_equal 1.3, profile[:version]
@@ -304,8 +308,6 @@ class StackProfTest < MiniTest::Test
     assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
     assert_equal true, profile[:sample_tags].all? { |t| Thread.current.to_s.include?(t[:thread_id])}
-  ensure
-    StackProf::Tag.clear
   end
 
   def test_tag_with_helper
@@ -321,8 +323,6 @@ class StackProfTest < MiniTest::Test
     assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
     assert_equal true, tag_order_matches(profile, [{}, {foo: :bar}, {}])
-  ensure
-    StackProf::Tag.clear
   end
 
   def test_tag_sample_from_tag_source_with_multiple_threads
@@ -347,9 +347,58 @@ class StackProfTest < MiniTest::Test
 
     #STDERR.puts "PROF #{profile[:sample_tags].inspect}"
     assert_equal true, tag_order_matches(profile, [{thread_id: sub_id, foo: :baz}, {thread_id: main_id, foo: :bar}, {thread_id: main_id}])
-  ensure
-    StackProf::Tag.clear
   end
+
+
+  def test_tag_samples_with_tags_as_closure
+    main_id = sub_id = ""
+    profile = StackProf.run(mode: :cpu, tags: [:foo, :spam]) do
+      main_id = parse_thread_id(Thread.current)
+      math
+      StackProf::Tag.with(foo: :bar) do
+        math
+        StackProf::Tag.with(foo: :baz) do
+          math
+          StackProf::Tag.with(spam: :eggs) do
+            math
+          end
+          math
+        end
+        math
+      end
+      math
+    end
+
+    assert_equal true, profile.key?(:sample_tags)
+    assert_equal profile[:samples], profile[:sample_tags].size
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal true, tag_order_matches(profile, [{}, {foo: :bar}, {foo: :baz}, {foo: :baz, spam: :eggs}, {foo: :baz}, {foo: :bar}, {}])
+  end
+
+  #def test_tag_sample_from_tag_source_with_multiple_threads
+  #  main_id = sub_id = ""
+  #  profile = StackProf.run(mode: :cpu, tags: [:thread_id, :foo]) do
+  #    main_id = parse_thread_id(Thread.current)
+  #    StackProf::Tag.set(foo: :bar)
+  #    Thread.new do
+  #      sub_id = parse_thread_id(Thread.current)
+  #      StackProf::Tag.set(foo: :baz)
+  #      math
+  #    end.join
+  #    math
+  #    StackProf::Tag.clear
+  #    math
+  #  end
+
+  #  assert_equal true, profile.key?(:sample_tags)
+  #  assert_equal profile[:samples], profile[:sample_tags].size
+  #  assert_operator profile[:sample_tags].size, :>, 0
+  #  assert_equal true, profile[:sample_tags].all? { |t| t.key?(:thread_id) }
+
+  #  #STDERR.puts "PROF #{profile[:sample_tags].inspect}"
+  #  assert_equal true, tag_order_matches(profile, [{thread_id: sub_id, foo: :baz}, {thread_id: main_id, foo: :bar}, {thread_id: main_id}])
+  #end
+
 
   def test_tag_sample_from_custom_tag_source
     custom_tag_source = :my_custom_tag_source
@@ -362,8 +411,6 @@ class StackProfTest < MiniTest::Test
     assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
     assert_equal true, profile[:sample_tags].all? { |t| t[:foo] == :bar }
-  ensure
-    StackProf::Tag.clear
   end
 
   def test_tag_sample_with_symbol_or_string
@@ -378,8 +425,6 @@ class StackProfTest < MiniTest::Test
     assert_operator profile[:sample_tags].size, :>, 0
     assert_equal true, profile[:sample_tags].all? { |t| t[:foo] == :bar }
     assert_equal true, profile[:sample_tags].all? { |t| t[:spam] == "a lot" }
-  ensure
-    StackProf::Tag.clear
   end
 
   def parse_thread_id(thread)
