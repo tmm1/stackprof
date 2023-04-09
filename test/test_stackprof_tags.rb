@@ -218,9 +218,12 @@ class StackProfTagsTest < MiniTest::Test
     end
 
     profile = StackProf.run(mode: :cpu, tags: [:thread_id, :function], raw: true) do
-      fast_function
-      math(1)
-      slow_function
+      5.times do
+        math(1)
+        fast_function
+        math(1)
+        slow_function
+      end
     end
 
     assert_equal true, profile.key?(:sample_tags)
@@ -229,11 +232,12 @@ class StackProfTagsTest < MiniTest::Test
     assert_equal true, profile[:sample_tags].all? { |t| t.key?(:thread_id) }
 
     main_tid = parse_thread_id(Thread.current)
-    assert_equal true,
-                 tag_order_matches(profile,
-                                   [{ thread_id: main_tid, function: :fast },
-                                    { thread_id: main_tid },
-                                    { thread_id: main_tid, function: :slow }])
+    expected_order = [{ thread_id: main_tid },
+                      { thread_id: main_tid, function: :fast },
+                      { thread_id: main_tid },
+                      { thread_id: main_tid, function: :slow }] * 5
+
+    assert_equal true, tag_order_matches(profile, expected_order)
 
     samples = parse_profile(profile)
 
