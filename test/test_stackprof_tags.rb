@@ -204,6 +204,60 @@ class StackProfTagsTest < MiniTest::Test
                                     { thread_id: main_id }])
   end
 
+  def test_tagged_funtions_do_not_skew
+    def fast_function
+      StackProf::Tag.with(function: :fast) do
+        math(2)
+      end
+    end
+
+    def slow_function
+      StackProf::Tag.with(function: :slow) do
+        math(8)
+      end
+    end
+
+    profile = StackProf.run(mode: :cpu, tags: [:thread_id, :function], raw: true) do
+      fast_function
+      math(1)
+      slow_function
+    end
+
+    assert_equal true, profile.key?(:sample_tags)
+    assert_equal profile[:samples], profile[:sample_tags].size
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal true, profile[:sample_tags].all? { |t| t.key?(:thread_id) }
+
+    main_tid = parse_thread_id(Thread.current)
+    assert_equal true,
+                 tag_order_matches(profile,
+                                   [{ thread_id: main_tid, function: :fast },
+                                    { thread_id: main_tid },
+                                    { thread_id: main_tid, function: :slow }])
+
+    samples = parse_profile(profile)
+
+    i = 0
+    while i < profile[:samples]
+      tags = profile[:sample_tags][i]
+      i += 1
+      function = tags[:function]
+      next unless function
+
+      # Ensure that none of the samples are mis-tagged
+      if function == :fast
+        assert_equal true, samples[i].any? { |f| f.include? ("fast_function") }
+        assert_equal true, samples[i].all? { |f| !f.include? ("slow_function") }
+      elsif function == :slow
+        assert_equal true, samples[i].any? { |f| f.include? ("slow_function") }
+        assert_equal true, samples[i].all? { |f| !f.include? ("fast_function") }
+      end
+    end
+  end
+
+
+  # BEGIN - TEST HELPER METHODS
+
   def parse_thread_id(thread)
     thread.to_s.scan(/#<Thread:(.*?)\s.*>/).flatten.first
   end
@@ -229,6 +283,43 @@ class StackProfTagsTest < MiniTest::Test
     rc = idx == (order.size - 1)
   ensure
     puts debugstr unless rc
+  end
+
+  # Parses the stackprof hash into a map of samples id to callchains
+  def parse_profile(profile)
+    return unless profile.key?(:raw)
+
+    stacks = {}
+    raw = profile[:raw]
+    i = 0
+    stack_id = 0
+    samples = 0
+    while i < raw.size
+      stack_height = raw[i]
+      stack_id += 1
+      i += 1
+      j = 0
+
+      stack = []
+      while j < stack_height
+        j += 1
+        id = raw[i]
+        i += 1
+        frame = profile[:frames][id][:name]
+        stack.push frame
+      end
+
+      num_samples = raw[i]
+      j = 0
+      while j < num_samples
+        j += 1
+        samples += 1
+        #printf("sample %02d: { stack %02d, num_samples=%02d, depth=%02d }\n", samples, stack_id, num_samples, stack_height)
+        stacks[samples] = stack
+      end
+      i += 1
+    end
+    stacks
   end
 
   def math(n)

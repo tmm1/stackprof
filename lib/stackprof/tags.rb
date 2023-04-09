@@ -2,10 +2,6 @@
 
 module StackProf
   module Tag
-    # TODO: add a way to inherit tags from parent thread by wrapping Thread.new and Fiber.new
-    # in a module, and include this module to monkey-patch them with these wrappers.
-    # work by passing all of Thread.current.keys with values to Thread.new
-
     class << self
       def with(tag_source: DEFAULT_TAG_SOURCE, **tags)
         before = check(tag_source: tag_source)
@@ -49,7 +45,6 @@ module StackProf
         @enabled ||= true
         @prepended ||= begin
           Thread.singleton_class.prepend(StackProf::Tag::ExtendedThread)
-          true
         end
       end
 
