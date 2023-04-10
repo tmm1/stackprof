@@ -395,11 +395,9 @@ sample_tags_i(st_data_t key, st_data_t val, st_data_t arg)
 {
     VALUE tags = (VALUE)arg;
 
-    //if (!RTEST(tags) || !RTEST(key) || !RTEST(val)) {
-    //    return ST_CONTINUE;
-    //}
-//    if (!RB_TYPE_P(key, T_FIXNUM))
-//	return ST_CONTINUE;
+    if (!RTEST(tags) ){ //|| !RTEST(key) || !RTEST(val)) {
+        return ST_CONTINUE;
+    }
 
     rb_hash_aset(tags, LONG2FIX(key), LONG2FIX(val));
     return ST_CONTINUE;
@@ -440,22 +438,24 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 	rb_hash_aset(results, sym_tag_strings, tag_strings);
 	free(_stackprof.tag_strings);
 	_stackprof.tag_strings = NULL;
-    	_stackprof.tag_strings_len = 0;
-    	_stackprof.tag_strings_capa = 0;
+	_stackprof.tag_strings_len = 0;
+	_stackprof.tag_strings_capa = 0;
+
     }
+
+    if(_stackprof.tag_string_table) {
+	st_free_table(_stackprof.tag_string_table);
+	_stackprof.tag_string_table = NULL;
+    }
+
 
     sample_tags = rb_ary_new_capa(_stackprof.sample_tags_len);
     for (size_t n = 0; n < _stackprof.sample_tags_len; n++) {
-        VALUE tags = rb_hash_new();
-        st_foreach(_stackprof.sample_tags[n].tags, sample_tags_i, (st_data_t)tags);
-        rb_ary_push(sample_tags, tags);
+	VALUE tags = rb_hash_new();
+	st_foreach(_stackprof.sample_tags[n].tags, sample_tags_i, (st_data_t)tags);
+	rb_ary_push(sample_tags, tags);
     }
     rb_hash_aset(results, sym_sample_tags, sample_tags);
-
-
-    // TODO null check first?
-    st_free_table(_stackprof.tag_string_table);
-    _stackprof.tag_string_table = NULL;
     
     free(_stackprof.sample_tags);
     _stackprof.sample_tags = NULL;
@@ -581,6 +581,7 @@ st_numtable_increment(st_table *table, st_data_t key, size_t increment)
 }
 
 static size_t
+//static inline size_t
 string_id_for(VALUE str)
 {
     size_t id;
@@ -798,7 +799,8 @@ stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t ti
 	stackprof_record_tags_for_sample();
 }
 
-static inline void
+//static inline void
+static void
 stackprof_tag_thread(VALUE *current_thread)
 {
     VALUE thread_id = rb_sprintf("%p", (void *)*current_thread);
@@ -822,7 +824,8 @@ Which may be overridden by passing :tag_source to Stackprof.run
 
 Any tags collected are stored in a pre-allocated buffer, to be recorded later.
 */
-static inline void
+//static inline void
+static void
 stackprof_buffer_tags(void)
 {
     VALUE tag, tagval, fiber_local_var = Qnil;
