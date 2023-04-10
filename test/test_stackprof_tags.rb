@@ -261,7 +261,7 @@ class StackProfTagsTest < MiniTest::Test
   # BEGIN - TEST HELPER METHODS
 
   def parse_thread_id(thread)
-    thread.to_s.scan(/#<Thread:(.*?)\s.*>/).flatten.first
+    thread.to_s.scan(/#<Thread:(\w*)/).flatten.first
   end
 
   def tag_order_matches(profile, order)
