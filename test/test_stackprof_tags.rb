@@ -69,7 +69,6 @@ class StackProfTagsTest < MiniTest::Test
   end
 
   def test_tag_samples_with_tags_as_closure
-    main_id = sub_id = ''
     profile = StackProf.run(mode: :cpu, tags: %i[foo spam]) do
       main_id = parse_thread_id(Thread.current)
       math(10)
