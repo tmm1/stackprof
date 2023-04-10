@@ -127,8 +127,7 @@ class StackProfTagsTest < MiniTest::Test
     assert_equal true, profile.key?(:sample_tags)
     assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
-    assert_equal true, StackProf::Tags::from(profile).all? { |t| t.key?(:thread_id) }
-
+    assert_equal true, all_samples_have_tag(profile, :thread_id)
     assert_equal true,
                  tag_order_matches(profile,
                                    [{ thread_id: sub_id, foo: "baz" },
@@ -262,6 +261,13 @@ class StackProfTagsTest < MiniTest::Test
 
   def parse_thread_id(thread)
     thread.to_s.scan(/#<Thread:(\w*)/).flatten.first
+  end
+
+
+  def all_samples_have_tag(profile, tag)
+    rc = StackProf::Tags::from(profile).all? { |t| t.key?(tag) }
+  ensure 
+    puts "Tags were: #{StackProf::Tags.from(profile).inspect}" unless rc
   end
 
   def tag_order_matches(profile, order)
