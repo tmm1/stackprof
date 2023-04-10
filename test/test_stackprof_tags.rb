@@ -330,4 +330,4 @@ class StackProfTagsTest < MiniTest::Test
       2**10
     end
   end
-end
+end unless RUBY_ENGINE == 'truffleruby'
