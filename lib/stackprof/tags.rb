@@ -75,4 +75,17 @@ module StackProf
       end
     end
   end
+
+  module Tags
+    module_function
+
+    def from(profile)
+      profile[:sample_tags].map do |tags|
+        tags.map do |k, v| 
+          [profile[:tag_strings][k-1].to_sym, profile[:tag_strings][v-1]]
+        end.to_h
+      end
+    end
+  end
+
 end

@@ -119,6 +119,7 @@ static struct {
     st_table *tag_string_table;
     char **tag_strings;
     size_t tag_strings_len;
+    size_t tag_strings_capa;
     size_t sample_tags_len;
     size_t sample_tags_capa;
 
@@ -151,7 +152,7 @@ static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_
 static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_metadata, sym_frames, sym_ignore_gc, sym_out;
 static VALUE sym_aggregate, sym_raw_sample_timestamps, sym_raw_timestamp_deltas, sym_state, sym_marking, sym_sweeping;
 static VALUE sym_gc_samples, objtracer;
-static VALUE sym__stackprof_tags, sym_sample_tags, sym_tag_source, sym_tags, sym_thread_id;
+static VALUE sym__stackprof_tags, sym_sample_tags, sym_tag_source, sym_tags, sym_tag_strings, sym_thread_id;
 static VALUE gc_hook;
 static VALUE rb_mStackProf;
 
@@ -267,6 +268,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.out = out;
     _stackprof.target_thread = pthread_self();
     _stackprof.tag_source = tag_source;
+    _stackprof.tag_strings = NULL;
     _stackprof.tags = tags;
 
     if (raw) {
@@ -393,11 +395,13 @@ sample_tags_i(st_data_t key, st_data_t val, st_data_t arg)
 {
     VALUE tags = (VALUE)arg;
 
-    if (!RTEST(tags) || !RTEST(key) || !RTEST(val)) {
-	return ST_CONTINUE;
-    }
+    //if (!RTEST(tags) || !RTEST(key) || !RTEST(val)) {
+    //    return ST_CONTINUE;
+    //}
+//    if (!RB_TYPE_P(key, T_FIXNUM))
+//	return ST_CONTINUE;
 
-    rb_hash_aset(tags, key, val);
+    rb_hash_aset(tags, LONG2FIX(key), LONG2FIX(val));
     return ST_CONTINUE;
 }
 
@@ -405,7 +409,7 @@ static VALUE
 stackprof_results(int argc, VALUE *argv, VALUE self)
 {
     VALUE results, frames;
-    VALUE sample_tags;
+    VALUE sample_tags, tag_strings;
 
     if (!_stackprof.frames || _stackprof.running)
 	return Qnil;
@@ -428,23 +432,37 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     st_free_table(_stackprof.frames);
     _stackprof.frames = NULL;
 
+    tag_strings = rb_ary_new_capa(_stackprof.tag_strings_len);
+    for (size_t n = 0; n < _stackprof.tag_strings_len; n++) {
+        rb_ary_push(tag_strings, rb_str_new_cstr(_stackprof.tag_strings[n]));
+    }
+    rb_hash_aset(results, sym_tag_strings, tag_strings);
+
     sample_tags = rb_ary_new_capa(_stackprof.sample_tags_len);
-    
     for (size_t n = 0; n < _stackprof.sample_tags_len; n++) {
         VALUE tags = rb_hash_new();
         st_foreach(_stackprof.sample_tags[n].tags, sample_tags_i, (st_data_t)tags);
         rb_ary_push(sample_tags, tags);
     }
+    rb_hash_aset(results, sym_sample_tags, sample_tags);
+
+
+    // TODO null check first?
+    st_free_table(_stackprof.tag_string_table);
+    _stackprof.tag_string_table = NULL;
     
     free(_stackprof.sample_tags);
+    free(_stackprof.tag_strings);
     _stackprof.sample_tags = NULL;
     _stackprof.sample_tags_len = 0;
     _stackprof.sample_tags_capa = 0;
+    _stackprof.tag_strings = NULL;
+    _stackprof.tag_strings_len = 0;
+    _stackprof.tag_strings_capa = 0;
     _stackprof.tag_source = Qnil;
     _stackprof.tags = Qnil;
     _stackprof.tag_thread_id = Qfalse;
     
-    rb_hash_aset(results, sym_sample_tags, sample_tags);
 
     if (_stackprof.raw && _stackprof.raw_samples_len) {
 	size_t len, n, o;
@@ -560,17 +578,38 @@ st_numtable_increment(st_table *table, st_data_t key, size_t increment)
     st_update(table, key, numtable_increment_callback, (st_data_t)increment);
 }
 
+static size_t
+string_id_for(VALUE str)
+{
+    size_t id;
+    st_data_t val = 0;
+
+    if (st_lookup(_stackprof.tag_string_table, (st_data_t) StringValueCStr(str), &val)) {
+        id = (size_t) val; // FIXME i think there is a macro for this
+    } else {
+	while (_stackprof.tag_strings_capa <= _stackprof.tag_strings_len + 1) {
+	    _stackprof.tag_strings_capa *= 2;
+	    _stackprof.tag_strings = realloc(_stackprof.tag_strings, sizeof(char *) * _stackprof.tag_strings_capa);
+	}
+	id = _stackprof.tag_strings_len + 1;
+	_stackprof.tag_strings[_stackprof.tag_strings_len++] = StringValueCStr(str);
+        st_insert(_stackprof.tag_string_table, (st_data_t) StringValueCStr(str), (st_data_t) (size_t) id);
+    }
+
+    return id;
+}
+
 static int
 index_tag_i(st_data_t key, st_data_t val, st_data_t arg)
 {
     st_table *tags = (st_table *)arg;
+    VALUE key_str = Qnil, val_str = Qnil;
 
     if (tags == NULL || !RTEST(key) || !RTEST(val)) {
 	return ST_CONTINUE;
     }
 
     /* TODO
-
     - initialize the string table and string array buffer
     - Look up key and value in the tag_string_table quickly
     - If they are found, store the resulting integer
@@ -581,13 +620,64 @@ index_tag_i(st_data_t key, st_data_t val, st_data_t arg)
     - Update tests to dereference tags correctly
     */
 
-    //st_table *tag_string_table;
-    //char *tag_strings[];
-    //size_t tag_strings_capa;
-    //size_t tag_strings_len;
+    if (!RB_TYPE_P(key, T_SYMBOL))
+	return ST_CONTINUE;
 
-    st_insert(tags, (st_data_t) key, (st_data_t) val);
+    key_str = rb_str_new_cstr(rb_id2name(SYM2ID(key)));
+
+    // TODO replace with type switch?
+    if (RB_TYPE_P(val, T_STRING))
+	val_str = val;
+
+    if (RB_TYPE_P(val, T_SYMBOL))
+	val_str = rb_str_new_cstr(rb_id2name(SYM2ID(val)));
+
+    if (!RTEST(val_str))
+	return ST_CONTINUE;
+
+    st_insert(tags, (st_data_t) string_id_for(key_str), (st_data_t) string_id_for(val_str));
     return ST_CONTINUE;
+}
+
+static void
+stackprof_record_tags_for_sample()
+{
+    // Allocate initial tag buffer
+    if (!_stackprof.sample_tags) {
+        _stackprof.sample_tags_capa = 100;
+        _stackprof.sample_tags = malloc(sizeof(sample_tags_t) * _stackprof.sample_tags_capa);
+        _stackprof.sample_tags_len = 0;
+    }
+
+    /* Double the buffer size if it's too small */
+    while (_stackprof.sample_tags_capa <= _stackprof.sample_tags_len + 1) {
+        _stackprof.sample_tags_capa *= 2;
+        _stackprof.sample_tags = realloc(_stackprof.sample_tags, sizeof(char *) * _stackprof.sample_tags_capa);
+    }
+
+    if (!_stackprof.tag_string_table) {
+	//_stackprof.tag_string_table = st_init_strtable();
+	_stackprof.tag_string_table = st_init_strtable();
+    }
+
+    if (!_stackprof.tag_strings) {
+	_stackprof.tag_strings_capa = 100;
+	_stackprof.tag_strings = malloc(sizeof(char *) * _stackprof.tag_strings_capa);
+	_stackprof.tag_strings_len = 0;
+    }
+
+
+    // Copy sample tags from buffer to accumulator
+    sample_tags_t *tag_data;
+    tag_data = ALLOC_N(sample_tags_t, 1);
+    MEMZERO(tag_data, sample_tags_t, 1);
+    tag_data->tags = st_init_numtable();
+
+    // TODO instead of copying, iterate over buffer and convert to string table entries for both key and value
+    st_foreach(_stackprof.sample_tag_buffer->tags, index_tag_i, (st_data_t)tag_data->tags);
+  
+    _stackprof.sample_tags[_stackprof.sample_tags_len++] = *tag_data;
+    st_clear(_stackprof.sample_tag_buffer->tags);
 }
 
 void
@@ -702,33 +792,11 @@ stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t ti
 	capture_timestamp(&_stackprof.last_sample_at);
     }
 
-    // Allocate initial tag buffer
-    if (!_stackprof.sample_tags) {
-        _stackprof.sample_tags_capa = 100;
-        _stackprof.sample_tags = malloc(sizeof(sample_tags_t) * _stackprof.sample_tags_capa);
-        _stackprof.sample_tags_len = 0;
-    }
-
-    /* Double the buffer size if it's too small */
-    while (_stackprof.sample_tags_capa <= _stackprof.sample_tags_len + 1) {
-        _stackprof.sample_tags_capa *= 2;
-        _stackprof.sample_tags = realloc(_stackprof.sample_tags, sizeof(sample_tags_t) * _stackprof.sample_tags_capa);
-    }
-
-    // Copy sample tags from buffer to accumulator
-    sample_tags_t *tag_data;
-    tag_data = ALLOC_N(sample_tags_t, 1);
-    MEMZERO(tag_data, sample_tags_t, 1);
-    tag_data->tags = st_init_numtable();
-
-    // TODO instead of copying, iterate over buffer and convert to string table entries for both key and value
-    st_foreach(_stackprof.sample_tag_buffer->tags, index_tag_i, (st_data_t)tag_data->tags);
-  
-    _stackprof.sample_tags[_stackprof.sample_tags_len++] = *tag_data;
-    st_clear(_stackprof.sample_tag_buffer->tags);
+    if (_stackprof.tag_thread_id || (RB_TYPE_P(_stackprof.tags, T_ARRAY) && RARRAY_LEN(_stackprof.tags) > 0 ))
+	stackprof_record_tags_for_sample();
 }
 
-static void
+static inline void
 stackprof_tag_thread(VALUE *current_thread)
 {
     VALUE thread_id = rb_sprintf("%p", (void *)*current_thread);
@@ -752,7 +820,7 @@ Which may be overridden by passing :tag_source to Stackprof.run
 
 Any tags collected are stored in a pre-allocated buffer, to be recorded later.
 */
-static void
+static inline void
 stackprof_buffer_tags(void)
 {
     VALUE tag, tagval, fiber_local_var = Qnil;
@@ -1107,6 +1175,7 @@ Init_stackprof(void)
     S(sweeping);
     S(sample_tags);
     S(tag_source);
+    S(tag_strings);
     S(tags);
     S(thread_id);
     S(_stackprof_tags);
