@@ -353,12 +353,38 @@ end
 Will result in tags like:
 
 ```
-[{}, {}, {}, {}, {}, {}, {:foo=>:bar}, {:foo=>:bar}, {:foo=>:bar}, {:foo=>:bar}, {}, {}, {}, {}, {}]
+[{}, {}, {}, {}, {}, {}, {:foo=>"bar"}, {:foo=>"bar"}, {:foo=>"bar"}, {:foo=>"bar"}, {}, {}, {}, {}, {}]
 ```
 
-When recording with stackprof, the special tag `:thread_id` will record the
-id of the thread that the profile was collected for before recording any other
-tags.
+Which can be used in analysis to filter for samples that match some label criteria.
+
+#### Viewing tags
+
+Note that for efficiency, the strings are stored in a table and we only store
+a reference to the string table. This is what the raw values look like:
+
+```
+irb> profile[:sample_tags]
+=> [{1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2, 3=>4}, {1=>2, 3=>4}, {1=>2, 3=>4}, {1=>2, 3=>4}, {1=>2, 3=>4}, {1=>2, 3=>4}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2, 3=>5}, {1=>2, 3=>5}, {1=>2, 3=>5}, {1=>2, 3=>5}, {1=>2, 3=>5}, {1=>2, 3=>5}, ... ]
+
+irb> profile[:tag_strings]
+=> ["thread_id", "0x0000000100a4b158", "function", "fast", "slow"]
+```
+
+We can decode this with a helper, `StackProf::Tags.from(profile)`, to map to
+the tag values:
+
+```
+irb> StackProf::Tags.from(profile)
+=> [{:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118", :function=>"fast"}, {:thread_id=>"0x0000000102ddb118", :function=>"fast"}, {:thread_id=>"0x0000000102ddb118", :function=>"fast"}, {:thread_id=>"0x0000000102ddb118", :function=>"fast"}, {:thread_id=>"0x0000000102ddb118", :function=>"fast"}, ... ]
+```
+
+There should be at tag set per sample, which can be mapped to individual samples
+in the `raw` field to see what callchain they are for.
+
+When recording with stackprof, the special tag `:thread_id` will indicate to
+record the id of the thread that the profile was collected for before recording
+any other tags.
 
 ```ruby
 StackProf::Tag.with(foo: :bar, &block) # sets the tag :foo, to value :bar while executing a block, then unsets it
