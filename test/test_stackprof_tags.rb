@@ -73,7 +73,6 @@ class StackProfTagsTest < MiniTest::Test
 
   def test_tag_samples_with_tags_as_closure
     profile = StackProf.run(mode: :cpu, tags: %i[foo spam]) do
-      main_id = parse_thread_id(Thread.current)
       math(10)
       StackProf::Tag.with(foo: :bar) do
         assert_operator StackProf::Tag.check, :==, { foo: :bar }
@@ -266,8 +265,11 @@ class StackProfTagsTest < MiniTest::Test
 
   def all_samples_have_tag(profile, tag)
     rc = StackProf::Tags::from(profile).all? { |t| t.key?(tag) }
-  ensure 
-    puts "Tags were: #{StackProf::Tags.from(profile).inspect}" unless rc
+  ensure
+    unless rc
+      puts "#{StackProf::Tags::from(profile).count{ |t| !t.key(tag) }}/#{profile[:sample_tags].size} samples did not contain the tag #{tag}"
+      puts "Tags were: #{StackProf::Tags.from(profile).inspect}"
+    end
   end
 
   def tag_order_matches(profile, order)
