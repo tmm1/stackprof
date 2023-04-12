@@ -17,8 +17,8 @@ class StackProfTagsTest < MiniTest::Test
     end
 
     assert_equal true, profile.key?(:sample_tags)
-    assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
     assert_equal true, all_samples_have_tag(profile, :thread_id)
     assert_equal true, StackProf::Tags.from(profile).all? { |t| Thread.current.to_s.include?(t[:thread_id]) }
   end
@@ -32,9 +32,10 @@ class StackProfTagsTest < MiniTest::Test
       end
       math(10)
     end
+
     assert_equal true, profile.key?(:sample_tags)
-    assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
     assert_equal true, tag_order_matches(profile, [{}, { foo: "bar" }, {}])
   end
 
@@ -48,8 +49,8 @@ class StackProfTagsTest < MiniTest::Test
     end
 
     assert_equal true, profile.key?(:sample_tags)
-    assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
     assert_equal true, all_samples_have_tag(profile, :foo)
     assert_equal true, StackProf::Tags.from(profile).all? { |t| t[:foo] == "bar" }
   end
@@ -63,8 +64,8 @@ class StackProfTagsTest < MiniTest::Test
     end
 
     assert_equal true, profile.key?(:sample_tags)
-    assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
     assert_equal true, all_samples_have_tag(profile, :foo)
     assert_equal true, StackProf::Tags.from(profile).all? { |t| t[:foo] == "bar" }
     assert_equal true, all_samples_have_tag(profile, :spam)
@@ -92,8 +93,8 @@ class StackProfTagsTest < MiniTest::Test
     end
 
     assert_equal true, profile.key?(:sample_tags)
-    assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
     assert_equal true,
                  tag_order_matches(profile,
                                    [{},
@@ -126,8 +127,8 @@ class StackProfTagsTest < MiniTest::Test
     end
 
     assert_equal true, profile.key?(:sample_tags)
-    assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
     assert_equal true, all_samples_have_tag(profile, :thread_id)
     assert_equal true,
                  tag_order_matches(profile,
@@ -160,8 +161,8 @@ class StackProfTagsTest < MiniTest::Test
     end
 
     assert_equal true, profile.key?(:sample_tags)
-    assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
     assert_equal true, all_samples_have_tag(profile, :thread_id)
 
     assert_equal true,
@@ -191,8 +192,8 @@ class StackProfTagsTest < MiniTest::Test
     end
 
     assert_equal true, profile.key?(:sample_tags)
-    assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
     assert_equal true, all_samples_have_tag(profile, :thread_id)
 
     assert_equal true,
@@ -225,8 +226,8 @@ class StackProfTagsTest < MiniTest::Test
     end
 
     assert_equal true, profile.key?(:sample_tags)
-    assert_equal profile[:samples], profile[:sample_tags].size
     assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
     assert_equal true, all_samples_have_tag(profile, :thread_id)
 
     main_tid = parse_thread_id(Thread.current)
@@ -239,9 +240,10 @@ class StackProfTagsTest < MiniTest::Test
 
     samples = parse_profile(profile)
 
+    sample_tags = StackProf::Tags.from(profile)
     i = 0
     while i < profile[:samples]
-      tags = profile[:sample_tags][i]
+      tags = sample_tags[i]
       i += 1
       function = tags[:function]
       next unless function
@@ -267,7 +269,7 @@ class StackProfTagsTest < MiniTest::Test
     rc = StackProf::Tags::from(profile).all? { |t| t.key?(tag) }
   ensure
     unless rc
-      puts "#{StackProf::Tags::from(profile).count{ |t| !t.key(tag) }}/#{profile[:sample_tags].size} samples did not contain the tag #{tag}"
+      puts "#{StackProf::Tags::from(profile).count{ |t| !t.key?(tag) }}/#{profile[:sample_tags].size} samples did not contain the tag #{tag}"
       puts "Tags were: #{StackProf::Tags.from(profile).inspect}"
     end
   end
