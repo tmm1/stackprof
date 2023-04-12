@@ -648,7 +648,9 @@ index_tag_i(st_data_t key, st_data_t val, st_data_t arg)
     if (!RTEST(val_str))
 	return ST_CONTINUE;
 
-    size_t key_id = string_id_for(key_str), val_id = string_id_for(val_str);
+    size_t key_id, val_id;
+    key_id = string_id_for(key_str);
+    val_id = string_id_for(val_str);
 
     if (_stackprof.last_tagset_matches && _stackprof.sample_tags_len > 0) {
 	last_tagset = _stackprof.sample_tags[_stackprof.sample_tags_len-1].tags;
@@ -694,7 +696,8 @@ stackprof_record_tags_for_sample()
 
 
     // Copy sample tags from buffer to accumulator
-    sample_tags_t tag_data, *last_tag_data = NULL;
+    sample_tags_t tag_data, *last_tag_data;
+    last_tag_data = NULL;
     tag_data = (sample_tags_t) {
 	.repeats = 1,
 	.tags = st_init_numtable(),
@@ -876,6 +879,7 @@ stackprof_buffer_tags(void)
 {
     VALUE tag, tagval, fiber_local_var = Qnil;
     VALUE current_thread =  rb_thread_current();
+    ID id;
     if(NIL_P(current_thread)) return;
 
     if (_stackprof.tag_thread_id) {
@@ -888,7 +892,7 @@ stackprof_buffer_tags(void)
 	if (!RB_TYPE_P(tag, T_SYMBOL)) continue;
 
 	if (!RTEST(_stackprof.tag_source)) return;
-	ID id = rb_check_id(&_stackprof.tag_source);
+	id = rb_check_id(&_stackprof.tag_source);
 	if (!id) return;
 
 	if (NIL_P(fiber_local_var))
