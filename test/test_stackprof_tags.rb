@@ -133,8 +133,10 @@ class StackProfTagsTest < MiniTest::Test
 
     profile = StackProf.run(mode: :cpu, tags: %i[thread_id foo], raw: true) do
       assert_operator StackProf::Tag.check, :==, { foo: :bar }
+      math(10)
       Thread.new do
         sub_id = parse_thread_id(Thread.current)
+        math(10)
         StackProf::Tag.set(foo: :baz)
         assert_operator StackProf::Tag.check, :==, { foo: :baz }
         math(10)
@@ -152,7 +154,9 @@ class StackProfTagsTest < MiniTest::Test
     assert_equal true, all_samples_have_tag(profile, :thread_id)
     assert_equal true,
                  tag_order_matches(profile,
-                                   [{ thread_id: sub_id, foo: "baz" },
+                                   [{ thread_id: main_id, foo: "bar" },
+                                    { thread_id: sub_id},
+                                    { thread_id: sub_id, foo: "baz" },
                                     { thread_id: main_id, foo: "bar" },
                                     { thread_id: main_id }])
   end
@@ -168,6 +172,7 @@ class StackProfTagsTest < MiniTest::Test
     assert_operator StackProf::Tag.check, :==, { foo: :bar, spam: :eggs }
 
     profile = StackProf.run(mode: :cpu, tags: %i[thread_id foo spam], raw: true) do
+      math(1)
       Thread.new do
         StackProf::Tag.set(foo: :baz)
         assert_operator StackProf::Tag.check, :==, { foo: :baz, spam: :eggs }
@@ -187,7 +192,8 @@ class StackProfTagsTest < MiniTest::Test
 
     assert_equal true,
                  tag_order_matches(profile,
-                                   [{ thread_id: sub_id, foo: "baz", spam: "eggs" },
+                                   [{ thread_id: main_id, foo: "bar", spam: "eggs" },
+                                    { thread_id: sub_id, foo: "baz", spam: "eggs" },
                                     { thread_id: main_id, foo: "bar", spam: "eggs" },
                                     { thread_id: main_id }])
 
@@ -199,6 +205,7 @@ class StackProfTagsTest < MiniTest::Test
     assert_equal false, StackProf::Tag::Persistence.enabled
 
     profile = StackProf.run(mode: :cpu, tags: %i[thread_id foo spam], raw: true) do
+      math(1)
       Thread.new do
         StackProf::Tag.set(foo: :baz)
         assert_operator StackProf::Tag.check, :==, { foo: :baz }
@@ -218,7 +225,8 @@ class StackProfTagsTest < MiniTest::Test
 
     assert_equal true,
                  tag_order_matches(profile,
-                                   [{ thread_id: sub_id, foo: "baz" },
+                                   [{ thread_id: main_id, foo: "bar", spam: "eggs" },
+                                    { thread_id: sub_id, foo: "baz" },
                                     { thread_id: main_id, foo: "bar", spam: "eggs" },
                                     { thread_id: main_id }])
   end
@@ -291,7 +299,7 @@ class StackProfTagsTest < MiniTest::Test
   ensure
     unless rc
       puts "#{tags.count{ |t| !t.key?(tag) }}/#{tags.size} samples did not contain the tag #{tag}"
-      puts "Tags were: #{StackProf::Tags.from(profile).inspect}, raw#{profile[:sample_tags].inspect}\n"
+      puts "Tags were: #{StackProf::Tags.from(profile).inspect}\nraw: \n#{profile[:sample_tags].inspect}\n"
       samplemap = parse_profile(profile)
       tags.each_with_index do |t, i|
         puts "Sample missing tag #{tag}:\n#{samplemap[i].inspect}" unless t.key?(tag)
@@ -360,7 +368,7 @@ class StackProfTagsTest < MiniTest::Test
     stacks
   end
 
-  def math(n)
+  def math(n = 1)
     base = 250_000
     (n * base).times do
       2**10

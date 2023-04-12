@@ -81,11 +81,18 @@ module StackProf
 
     def from(profile)
       expanded = profile[:sample_tags].each_slice(2).map {|v, n| n.times.map{ v }}.flatten
-      expanded.map do |tags|
+      tags = expanded.map do |tags|
         tags.map do |k, v| 
           [profile[:tag_strings][k-1].to_sym, profile[:tag_strings][v-1]]
         end.to_h
       end
+      if tags.size != profile[:samples]
+        puts "ERROR - tag cardinality mismatch #{profile[:samples]} != #{tags.size}"
+        puts "MISSED #{profile[:missed_samples]}"
+        puts tags.inspect
+        puts "raw:\n#{profile[:sample_tags].inspect}"
+      end
+      tags
     end
   end
 
