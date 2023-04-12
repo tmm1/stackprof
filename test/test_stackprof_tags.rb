@@ -174,6 +174,7 @@ class StackProfTagsTest < MiniTest::Test
     profile = StackProf.run(mode: :cpu, tags: %i[thread_id foo spam], raw: true) do
       math(10)
       Thread.new do
+        assert_operator StackProf::Tag.check, :==, { foo: :bar, spam: :eggs }
         math(10)
         StackProf::Tag.set(foo: :baz)
         assert_operator StackProf::Tag.check, :==, { foo: :baz, spam: :eggs }
