@@ -172,8 +172,9 @@ class StackProfTagsTest < MiniTest::Test
     assert_operator StackProf::Tag.check, :==, { foo: :bar, spam: :eggs }
 
     profile = StackProf.run(mode: :cpu, tags: %i[thread_id foo spam], raw: true) do
-      math(1)
+      math(10)
       Thread.new do
+        math(10)
         StackProf::Tag.set(foo: :baz)
         assert_operator StackProf::Tag.check, :==, { foo: :baz, spam: :eggs }
         sub_id = parse_thread_id(Thread.current)
@@ -193,6 +194,7 @@ class StackProfTagsTest < MiniTest::Test
     assert_equal true,
                  tag_order_matches(profile,
                                    [{ thread_id: main_id, foo: "bar", spam: "eggs" },
+                                    { thread_id: sub_id, foo: "bar", spam: "eggs" },
                                     { thread_id: sub_id, foo: "baz", spam: "eggs" },
                                     { thread_id: main_id, foo: "bar", spam: "eggs" },
                                     { thread_id: main_id }])
