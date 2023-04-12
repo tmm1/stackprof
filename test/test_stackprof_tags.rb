@@ -329,7 +329,7 @@ class StackProfTagsTest < MiniTest::Test
     end
     rc = idx == (order.size - 1)
   ensure
-    puts "Tags were: #{StackProf::Tags.from(profile).inspect}raw:\n#{profile[:sample_tags].inspect}\n#{debugstr}" unless rc
+    puts "Tags were: #{StackProf::Tags.from(profile).inspect}\nraw: #{profile[:sample_tags].inspect}\nstrtab: #{profile[:tag_strings]}\n#{debugstr}" unless rc
   end
 
   # Parses the stackprof hash into a map of samples id to callchains
