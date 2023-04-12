@@ -10,6 +10,26 @@ class StackProfTagsTest < MiniTest::Test
     StackProf::Tag::Persistence.disable
   end
 
+  def test_tag_fields_present_if_tags
+    profile = StackProf.run(mode: :wall, tags: [:thread_id]) do
+      assert_operator StackProf::Tag.check, :==, {}
+      math(1)
+    end
+
+    assert_equal true, profile.key?(:sample_tags)
+    assert_equal true, profile.key?(:tag_strings)
+  end
+
+  def test_tag_fields_not_present_if_no_tags
+    profile = StackProf.run(mode: :wall) do
+      assert_operator StackProf::Tag.check, :==, {}
+      math(1)
+    end
+
+    assert_equal false, profile.key?(:sample_tags)
+    assert_equal false, profile.key?(:tag_strings)
+  end
+
   def test_tag_thread_id
     profile = StackProf.run(mode: :wall, tags: [:thread_id]) do # FIXME: try :wall to make tests faster
       assert_operator StackProf::Tag.check, :==, {}

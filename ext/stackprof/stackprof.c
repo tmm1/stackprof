@@ -411,7 +411,7 @@ static VALUE
 stackprof_results(int argc, VALUE *argv, VALUE self)
 {
     VALUE results, frames;
-    VALUE sample_tags, tag_strings;
+    VALUE sample_tags = Qnil, tag_strings = Qnil;
 
     if (!_stackprof.frames || _stackprof.running)
 	return Qnil;
@@ -455,15 +455,16 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     st_free_table(_stackprof.sample_tag_buffer);
     _stackprof.sample_tag_buffer = NULL;
 
-    sample_tags = rb_ary_new_capa(_stackprof.sample_tags_len);
-    for (size_t n = 0; n < _stackprof.sample_tags_len; n++) {
-	VALUE tags = rb_hash_new();
-	st_foreach(_stackprof.sample_tags[n].tags, sample_tags_i, (st_data_t)tags);
-	rb_ary_push(sample_tags, tags);
-	rb_ary_push(sample_tags, ULONG2NUM(_stackprof.sample_tags[n].repeats));
+    if (_stackprof.sample_tags_len > 0) {
+        sample_tags = rb_ary_new_capa(_stackprof.sample_tags_len);
+        for (size_t n = 0; n < _stackprof.sample_tags_len; n++) {
+	    VALUE tags = rb_hash_new();
+	    st_foreach(_stackprof.sample_tags[n].tags, sample_tags_i, (st_data_t)tags);
+	    rb_ary_push(sample_tags, tags);
+	    rb_ary_push(sample_tags, ULONG2NUM(_stackprof.sample_tags[n].repeats));
+	}
+	rb_hash_aset(results, sym_sample_tags, sample_tags);
     }
-    rb_hash_aset(results, sym_sample_tags, sample_tags);
-  
     free(_stackprof.sample_tags);
     _stackprof.record_tags = 0;
     _stackprof.sample_tags = NULL;
