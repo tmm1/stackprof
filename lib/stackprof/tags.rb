@@ -27,7 +27,7 @@ module StackProf
       end
 
       def check(tag_source: DEFAULT_TAG_SOURCE)
-        Thread.current.fetch(tag_source, {}).dup
+        (Thread.current[tag_source] || {}).dup
       end
     end
 
