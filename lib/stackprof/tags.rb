@@ -61,7 +61,7 @@ module StackProf
         return super(*args, &block) unless StackProf::Tag::Persistence.enabled
 
         wrap_block = begin
-          thread_vars = Thread.current.fetch(DEFAULT_TAG_SOURCE, nil) # FIXME: read the tag source from module variable, don't assume it is default
+          thread_vars = Thread.current[DEFAULT_TAG_SOURCE] # FIXME: read the tag source from module variable, don't assume it is default
           if thread_vars.is_a?(Hash) && !thread_vars.empty?
             wrap_block = proc do
               Thread.current[DEFAULT_TAG_SOURCE] = thread_vars.dup
