@@ -5,7 +5,7 @@ module StackProf
     class << self
       def with(tag_source: DEFAULT_TAG_SOURCE, **tags)
         before = check(tag_source: tag_source)
-        set(**tags, tag_source: tag_source) # TODO: push this onto a stack rather than set / unset, or we will clobber old values
+        set(**tags, tag_source: tag_source)
         yield
         Thread.current[tag_source] = before
       end

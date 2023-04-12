@@ -703,6 +703,11 @@ stackprof_record_tags_for_sample()
 	.tags = st_init_numtable(),
     };
 
+    if (_stackprof.tag_thread_id) {
+        if(_stackprof.sample_tag_buffer->num_entries == 0)
+	   printf("ERROR - Expected at least one tag, got 0");
+    }
+
     if (_stackprof.sample_tags_len > 0) {
 	st_data_t last_size, tag_size;
 	
@@ -728,7 +733,6 @@ stackprof_record_tags_for_sample()
 	//}
         _stackprof.sample_tags[_stackprof.sample_tags_len++] = tag_data;
     }
-    st_clear(_stackprof.sample_tag_buffer);
 }
 
 void
@@ -882,13 +886,18 @@ stackprof_buffer_tags(void)
     ID id;
     if(NIL_P(current_thread)) return;
 
+    if(_stackprof.sample_tag_buffer->num_entries > 0)
+	st_clear(_stackprof.sample_tag_buffer);
+
     if (_stackprof.tag_thread_id) {
         stackprof_tag_thread(&current_thread);
+        if(_stackprof.sample_tag_buffer->num_entries == 0)
+	   printf("ZERO TAGS BUFFERED\n");
     }
 
     // Buffer all requested tags. Overhead increases with the cardinality of the set of tags to record
     for(long n = 0; n <  RARRAY_LEN(_stackprof.tags); n++) {
-	tag= rb_ary_entry(_stackprof.tags, n);
+	tag = rb_ary_entry(_stackprof.tags, n);
 	if (!RB_TYPE_P(tag, T_SYMBOL)) continue;
 
 	if (!RTEST(_stackprof.tag_source)) return;
@@ -919,6 +928,7 @@ stackprof_buffer_sample(void)
 
     if (_stackprof.buffer_count > 0) {
 	// Another sample is already pending
+	printf("ALREADY BUFFERED\n");
 	return;
     }
 
@@ -1042,7 +1052,10 @@ stackprof_job_sample_and_record(void *data)
 static void
 stackprof_job_record_buffer(void *data)
 {
-    if (!_stackprof.running) return;
+    if (!_stackprof.running) {
+	printf("EARLY RETURN\n");
+	return;
+    }
 
     stackprof_record_buffer();
 }
