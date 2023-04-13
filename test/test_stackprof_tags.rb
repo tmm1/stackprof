@@ -208,11 +208,13 @@ class StackProfTagsTest < MiniTest::Test
     assert_equal false, StackProf::Tag::Persistence.enabled
 
     profile = StackProf.run(mode: :cpu, tags: %i[thread_id foo spam], raw: true) do
-      math(1)
+      math(10)
       Thread.new do
+        sub_id = parse_thread_id(Thread.current)
+        assert_operator StackProf::Tag.check, :==, { }
+        math(10)
         StackProf::Tag.set(foo: :baz)
         assert_operator StackProf::Tag.check, :==, { foo: :baz }
-        sub_id = parse_thread_id(Thread.current)
         math(10)
       end.join
       math(10)
@@ -229,6 +231,7 @@ class StackProfTagsTest < MiniTest::Test
     assert_equal true,
                  tag_order_matches(profile,
                                    [{ thread_id: main_id, foo: "bar", spam: "eggs" },
+                                    { thread_id: sub_id },
                                     { thread_id: sub_id, foo: "baz" },
                                     { thread_id: main_id, foo: "bar", spam: "eggs" },
                                     { thread_id: main_id }])
@@ -254,6 +257,7 @@ class StackProfTagsTest < MiniTest::Test
         math(5)
         slow_function
       end
+      math(5)
     end
 
     assert_equal true, profile.key?(:sample_tags)
@@ -266,6 +270,7 @@ class StackProfTagsTest < MiniTest::Test
                       { thread_id: main_tid, function: "fast" },
                       { thread_id: main_tid },
                       { thread_id: main_tid, function: "slow" }] * 5
+    expected_order << { thread_id: main_tid }
 
     assert_equal true, tag_order_matches(profile, expected_order)
 
@@ -316,8 +321,11 @@ class StackProfTagsTest < MiniTest::Test
     return rc if order.empty?
 
     idx = 0
+    sampleIdx = 0
     acceptable = nil
-    StackProf::Tags.from(profile).each do |tags|
+    sampleTags = StackProf::Tags.from(profile)
+    sampleTags.each do |tags|
+      sampleIdx += 1
       acceptable = order[idx]
       next unless tags != acceptable && idx < order.size
 
@@ -330,7 +338,10 @@ class StackProfTagsTest < MiniTest::Test
     end
     rc = idx == (order.size - 1)
   ensure
-    puts "Tags were: #{StackProf::Tags.from(profile).inspect}\nraw: #{profile[:sample_tags].inspect}\nstrtab: #{profile[:tag_strings]}\n#{debugstr}" unless rc
+    unless rc
+      puts "Failed on sample #{sampleIdx - 1}/#{sampleTags.size}"
+      puts "Tags were: #{StackProf::Tags.from(profile).inspect}\nraw: #{profile[:sample_tags].inspect}\nstrtab: #{profile[:tag_strings]}\n#{debugstr}"
+    end
   end
 
   # Parses the stackprof hash into a map of samples id to callchains

@@ -86,7 +86,7 @@ module StackProf
           [profile[:tag_strings][k-1].to_sym, profile[:tag_strings][v-1]]
         end.to_h
       end
-      if tags.size != profile[:samples]
+      if tags.size != profile[:samples] # FIXME for debugging - don't actually ship with this
         puts "ERROR - tag cardinality mismatch #{profile[:samples]} != #{tags.size}"
         puts "MISSED #{profile[:missed_samples]}"
         puts tags.inspect
@@ -95,5 +95,4 @@ module StackProf
       tags
     end
   end
-
 end

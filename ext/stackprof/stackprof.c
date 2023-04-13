@@ -614,8 +614,8 @@ string_id_for(VALUE str)
 	    _stackprof.tag_strings_capa *= 2;
 	    _stackprof.tag_strings = realloc(_stackprof.tag_strings, sizeof(char *) * _stackprof.tag_strings_capa);
 	}
-	id = _stackprof.tag_strings_len + 1;
 	_stackprof.tag_strings[_stackprof.tag_strings_len++] = StringValueCStr(str);
+	id = _stackprof.tag_strings_len;
         st_insert(_stackprof.tag_string_table, (st_data_t) StringValueCStr(str), (st_data_t) (size_t) id);
     }
 
