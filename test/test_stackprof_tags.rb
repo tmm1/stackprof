@@ -20,15 +20,15 @@ class StackProfTagsTest < MiniTest::Test
     assert_equal true, profile.key?(:tag_strings)
   end
 
-  #def test_tag_fields_not_present_if_no_tags
-  #  profile = StackProf.run(mode: :wall) do
-  #    assert_operator StackProf::Tag.check, :==, {}
-  #    math(1)
-  #  end
+  def test_tag_fields_not_present_if_no_tags
+    profile = StackProf.run(mode: :wall) do
+      assert_operator StackProf::Tag.check, :==, {}
+      math(1)
+    end
 
-  #  assert_equal false, profile.key?(:sample_tags)
-  #  assert_equal false, profile.key?(:tag_strings)
-  #end
+    assert_equal false, profile.key?(:sample_tags)
+    assert_equal false, profile.key?(:tag_strings)
+  end
 
   def test_tag_thread_id
     profile = StackProf.run(mode: :wall, tags: [:thread_id], raw: true) do # FIXME: try :wall to make tests faster
@@ -327,6 +327,7 @@ class StackProfTagsTest < MiniTest::Test
     idx = 0
     sampleIdx = 0
     acceptable = nil
+    next_acceptable = nil
     sampleTags = StackProf::Tags.from(profile)
     sampleTags.each do |tags|
       sampleIdx += 1
@@ -343,7 +344,8 @@ class StackProfTagsTest < MiniTest::Test
     rc = idx == (order.size - 1)
   ensure
     unless rc
-      puts "Failed on sample #{sampleIdx - 1}/#{sampleTags.size}"
+      puts "Failed on sample #{sampleIdx - 1}/#{sampleTags.size} -> #{sampleTags[sampleIdx-1]} != #{next_acceptable}"
+      puts "GC samples: #{profile[:gc_samples]}"
       puts "Tags were: #{StackProf::Tags.from(profile).inspect}\nraw: #{profile[:sample_tags].inspect}\nstrtab: #{profile[:tag_strings]}\n#{debugstr}"
     end
   end
