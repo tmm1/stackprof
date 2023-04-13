@@ -731,6 +731,8 @@ stackprof_record_tags_for_sample()
 
 	st_insert(tag_data.tags, (st_data_t) thread_str_id, (st_data_t) thread_val_str_id);
 	_stackprof.current_thread_id = 0;
+    } else {
+	printf("NO RECORD THREAD\n");
     }
 
     if (_stackprof.sample_tags_len > 0) {
@@ -907,7 +909,10 @@ stackprof_buffer_tags(void)
     VALUE tag, tagval, fiber_local_var = Qnil;
     VALUE current_thread =  rb_thread_current();
     ID id;
-    if(NIL_P(current_thread)) return;
+    if(NIL_P(current_thread)) {
+	printf("NIL THREAD!\n");
+	return;
+    }
 
     if(_stackprof.sample_tag_buffer->num_entries > 0)
 	st_clear(_stackprof.sample_tag_buffer);
