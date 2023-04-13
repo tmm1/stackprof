@@ -682,10 +682,10 @@ index_tag_i(st_data_t key, st_data_t val, st_data_t arg)
 }
 
 static void
-stackprof_record_tags_for_sample()
+stackprof_record_tags_for_sample(void)
 {
     VALUE thread_id = Qnil;
-    size_t thread_str_id, thread_val_str_id;
+    size_t thread_str_id = 0, thread_val_str_id = 0;
     const char *sym_thread_id_str;
 
     _stackprof.overall_tags++;
@@ -731,8 +731,6 @@ stackprof_record_tags_for_sample()
 
 	st_insert(tag_data.tags, (st_data_t) thread_str_id, (st_data_t) thread_val_str_id);
 	_stackprof.current_thread_id = 0;
-    } else {
-	printf("NO RECORD THREAD\n");
     }
 
     if (_stackprof.sample_tags_len > 0) {
