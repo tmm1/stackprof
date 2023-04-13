@@ -161,6 +161,9 @@ class StackProfTagsTest < MiniTest::Test
                                     { thread_id: main_id }])
   end
 
+  # NB - this test is inherently flaky due to a race condition where it is
+  # possible a sample will be taken after the new thread starts, before the
+  # tags are inherited. It should be rare, and only affect a small number of samples
   def test_sample_tag_persistence_from_parent
     StackProf::Tag::Persistence.enable
     assert_equal true, StackProf::Tag::Persistence.enabled
