@@ -615,8 +615,8 @@ string_id_for(const char *str)
 	    _stackprof.tag_strings_capa *= 2;
 	    _stackprof.tag_strings = realloc(_stackprof.tag_strings, sizeof(char *) * _stackprof.tag_strings_capa);
 	}
-	_stackprof.tag_strings[_stackprof.tag_strings_len] = malloc(sizeof(char) * strlen(str)); // TODO free this in_results
-	strncpy(_stackprof.tag_strings[_stackprof.tag_strings_len++], str, strlen(str));
+	_stackprof.tag_strings[_stackprof.tag_strings_len] = malloc(sizeof(char) * strlen(str) + 1); // TODO free this in_results
+	strncpy(_stackprof.tag_strings[_stackprof.tag_strings_len++], str, strlen(str) + 1);
 	id = _stackprof.tag_strings_len;
         st_insert(_stackprof.tag_string_table, (st_data_t) str, (st_data_t) (size_t) id);
     }
@@ -646,7 +646,8 @@ index_tag_i(st_data_t key, st_data_t val, st_data_t arg)
     - Update tests to dereference tags correctly
     */
 
-    key_str = rb_id2name(key);
+    VALUE tmp = rb_str_new_cstr(rb_id2name(key));
+    key_str = StringValueCStr(tmp); // wrapped twice to get it null-terminated
 
     // TODO replace with type switch?
     if (RB_TYPE_P(val, T_STRING))
