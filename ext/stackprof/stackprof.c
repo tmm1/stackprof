@@ -125,6 +125,7 @@ static struct {
     st_table *sample_tag_buffer;
     st_table *tag_string_table;
     sample_tags_t *sample_tags;
+    void *current_thread_id; // TODO is this the best pointer type? :grimmace:
 
     struct timestamp_t last_sample_at;
     sample_time_t *raw_sample_times;
@@ -274,6 +275,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.tag_source = tag_source;
     _stackprof.tag_strings = NULL;
     _stackprof.tags = tags;
+    _stackprof.current_thread_id = NULL;
     _stackprof.last_tagset_matches = 0;
     _stackprof.overall_tags = 0;
     _stackprof.pending_tags = 0;
@@ -483,6 +485,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     _stackprof.tags = Qnil;
     _stackprof.tag_thread_id = Qfalse;
     _stackprof.last_tagset_matches = 0;
+    _stackprof.current_thread_id = NULL;
     _stackprof.overall_tags = 0;
     _stackprof.pending_tags = 0;
     _stackprof.buffer_count = 0;
@@ -681,6 +684,10 @@ index_tag_i(st_data_t key, st_data_t val, st_data_t arg)
 static void
 stackprof_record_tags_for_sample()
 {
+    VALUE thread_id = Qnil;
+    size_t thread_str_id, thread_val_str_id;
+    const char *sym_thread_id_str;
+
     _stackprof.overall_tags++;
     // Allocate initial tag buffer
     if (!_stackprof.sample_tags) {
@@ -705,7 +712,6 @@ stackprof_record_tags_for_sample()
 	_stackprof.tag_strings_len = 0;
     }
 
-
     // Copy sample tags from buffer to accumulator
     sample_tags_t tag_data, *last_tag_data;
     last_tag_data = NULL;
@@ -714,9 +720,17 @@ stackprof_record_tags_for_sample()
 	.tags = st_init_numtable(),
     };
 
-    if (_stackprof.tag_thread_id) {
-        if(_stackprof.sample_tag_buffer->num_entries == 0)
-	   printf("ERROR - Expected at least one tag, got 0");
+    // If the thread ID should be recorded and we buffered it, store its string representation now
+    // TODO is there any we to get the thread name? Would be nice to append it if non-empty
+    if (_stackprof.tag_thread_id && _stackprof.current_thread_id) {
+	sym_thread_id_str = rb_id2name(SYM2ID(sym_thread_id));
+	thread_id = rb_sprintf("%p", (void *) _stackprof.current_thread_id);
+
+	thread_str_id = string_id_for(sym_thread_id_str);
+	thread_val_str_id = string_id_for(StringValueCStr(thread_id));
+
+	st_insert(tag_data.tags, (st_data_t) thread_str_id, (st_data_t) thread_val_str_id);
+	_stackprof.current_thread_id = NULL;
     }
 
     if (_stackprof.sample_tags_len > 0) {
@@ -724,9 +738,18 @@ stackprof_record_tags_for_sample()
 	
 	last_tag_data = &_stackprof.sample_tags[_stackprof.sample_tags_len-1];
 	
-	tag_size = _stackprof.sample_tag_buffer->num_entries;
+	if (thread_str_id && thread_val_str_id) {
+	    st_data_t val;
+	    if (st_lookup(last_tag_data->tags, thread_str_id, &val)) {
+	        _stackprof.last_tagset_matches = thread_val_str_id == (size_t) val;
+	    } else {
+	        _stackprof.last_tagset_matches = 1;
+	    }
+	}
+
+	tag_size = _stackprof.sample_tag_buffer->num_entries + tag_data.tags->num_entries;
 	last_size = last_tag_data->tags->num_entries;
-        _stackprof.last_tagset_matches = tag_size == last_size;
+        _stackprof.last_tagset_matches &= tag_size == last_size;
 	//printf("THIS SIZE %lu, LAST SIZE %lu\n", (size_t) tag_size, (size_t) last_size);
     }
     st_foreach(_stackprof.sample_tag_buffer, index_tag_i, (st_data_t)tag_data.tags);
@@ -861,15 +884,6 @@ stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t ti
     }
 }
 
-//static inline void
-static void
-stackprof_tag_thread(VALUE *current_thread)
-{
-    VALUE thread_id = rb_sprintf("%p", (void *)*current_thread);
-
-    if (RTEST(thread_id))
-	st_insert(_stackprof.sample_tag_buffer, (st_data_t) SYM2ID(sym_thread_id), (st_data_t) thread_id);
-}
 
 /*
 stackprof_buffer_tags collects tags from a fiber local variable if it is present.
@@ -899,9 +913,7 @@ stackprof_buffer_tags(void)
 	st_clear(_stackprof.sample_tag_buffer);
 
     if (_stackprof.tag_thread_id) {
-        stackprof_tag_thread(&current_thread);
-        if(_stackprof.sample_tag_buffer->num_entries == 0)
-	   printf("ZERO TAGS BUFFERED\n");
+	_stackprof.current_thread_id = (void *) current_thread;
     }
 
     // Buffer all requested tags. Overhead increases with the cardinality of the set of tags to record
@@ -1061,10 +1073,7 @@ stackprof_job_sample_and_record(void *data)
 static void
 stackprof_job_record_buffer(void *data)
 {
-    if (!_stackprof.running) {
-	printf("EARLY RETURN\n");
-	return;
-    }
+    if (!_stackprof.running) return;
 
     stackprof_record_buffer();
 }
