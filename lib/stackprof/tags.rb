@@ -56,6 +56,9 @@ module StackProf
 
     # ExtendedThread wraps Thread.new constructor in order to toggle inheritence
     # of a specific thread local value
+    # NB - this is **racy**:  it is possible that a small number of samples
+    # in the child thread will be missing the tags, if the sample is taken
+    # after the thread is created, and before the vars are set.
     module ExtendedThread
       def new(*args, &block)
         return super(*args, &block) unless StackProf::Tag::Persistence.enabled

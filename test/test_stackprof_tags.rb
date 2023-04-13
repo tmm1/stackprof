@@ -307,6 +307,7 @@ class StackProfTagsTest < MiniTest::Test
   ensure
     unless rc
       puts "#{tags.count{ |t| !t.key?(tag) }}/#{tags.size} samples did not contain the tag #{tag}"
+      puts "GC samples: #{profile[:gc_samples]}"
       puts "Tags were: #{StackProf::Tags.from(profile).inspect}\nraw: #{profile[:sample_tags].inspect}\nstrtab: #{profile[:tag_strings].inspect}"
       samplemap = parse_profile(profile)
       tags.each_with_index do |t, i|
