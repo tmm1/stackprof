@@ -442,13 +442,13 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
         tag_strings = rb_ary_new_capa(_stackprof.tag_strings_len);
         for (size_t n = 0; n < _stackprof.tag_strings_len; n++) {
             rb_ary_push(tag_strings, rb_str_new_cstr(_stackprof.tag_strings[n]));
+	    free(_stackprof.tag_strings[n]);
         }
 	rb_hash_aset(results, sym_tag_strings, tag_strings);
 	free(_stackprof.tag_strings);
 	_stackprof.tag_strings = NULL;
 	_stackprof.tag_strings_len = 0;
 	_stackprof.tag_strings_capa = 0;
-
     }
 
     if(_stackprof.tag_string_table) {
@@ -603,21 +603,22 @@ st_numtable_increment(st_table *table, st_data_t key, size_t increment)
 
 static size_t
 //static inline size_t
-string_id_for(VALUE str)
+string_id_for(const char *str)
 {
     size_t id;
     st_data_t val = 0;
 
-    if (st_lookup(_stackprof.tag_string_table, (st_data_t) StringValueCStr(str), &val)) {
+    if (st_lookup(_stackprof.tag_string_table, (st_data_t) str, &val)) {
         id = (size_t) val; // FIXME i think there is a macro for this
     } else {
 	while (_stackprof.tag_strings_capa <= _stackprof.tag_strings_len + 1) {
 	    _stackprof.tag_strings_capa *= 2;
 	    _stackprof.tag_strings = realloc(_stackprof.tag_strings, sizeof(char *) * _stackprof.tag_strings_capa);
 	}
-	_stackprof.tag_strings[_stackprof.tag_strings_len++] = StringValueCStr(str);
+	_stackprof.tag_strings[_stackprof.tag_strings_len] = malloc(sizeof(char) * strlen(str)); // TODO free this in_results
+	strncpy(_stackprof.tag_strings[_stackprof.tag_strings_len++], str, strlen(str));
 	id = _stackprof.tag_strings_len;
-        st_insert(_stackprof.tag_string_table, (st_data_t) StringValueCStr(str), (st_data_t) (size_t) id);
+        st_insert(_stackprof.tag_string_table, (st_data_t) str, (st_data_t) (size_t) id);
     }
 
     return id;
@@ -627,7 +628,7 @@ static int
 index_tag_i(st_data_t key, st_data_t val, st_data_t arg)
 {
     st_table *tags = (st_table *)arg, *last_tagset = NULL;
-    VALUE key_str = Qnil, val_str = Qnil;
+    const char *key_str = NULL, *val_str = NULL;
     VALUE previous_tagval;
 
     if (tags == NULL || !RTEST(key) || !RTEST(val)) {
@@ -645,19 +646,16 @@ index_tag_i(st_data_t key, st_data_t val, st_data_t arg)
     - Update tests to dereference tags correctly
     */
 
-    if (!RB_TYPE_P(key, T_SYMBOL))
-	return ST_CONTINUE;
-
-    key_str = rb_str_new_cstr(rb_id2name(SYM2ID(key)));
+    key_str = rb_id2name(key);
 
     // TODO replace with type switch?
     if (RB_TYPE_P(val, T_STRING))
-	val_str = val;
+	val_str = StringValueCStr(val);
 
     if (RB_TYPE_P(val, T_SYMBOL))
-	val_str = rb_str_new_cstr(rb_id2name(SYM2ID(val)));
+	val_str = rb_id2name(SYM2ID(val));
 
-    if (!RTEST(val_str))
+    if (!val_str)
 	return ST_CONTINUE;
 
     size_t key_id, val_id;
@@ -697,7 +695,6 @@ stackprof_record_tags_for_sample()
     }
 
     if (!_stackprof.tag_string_table) {
-	//_stackprof.tag_string_table = st_init_strtable();
 	_stackprof.tag_string_table = st_init_strtable();
     }
 
@@ -870,7 +867,7 @@ stackprof_tag_thread(VALUE *current_thread)
     VALUE thread_id = rb_sprintf("%p", (void *)*current_thread);
 
     if (RTEST(thread_id))
-	st_insert(_stackprof.sample_tag_buffer, (st_data_t) sym_thread_id, (st_data_t) thread_id);
+	st_insert(_stackprof.sample_tag_buffer, (st_data_t) SYM2ID(sym_thread_id), (st_data_t) thread_id);
 }
 
 /*
@@ -923,7 +920,7 @@ stackprof_buffer_tags(void)
 	tagval = rb_hash_aref(fiber_local_var, tag);
 	if (!RB_TYPE_P(tagval, T_SYMBOL) && !RB_TYPE_P(tagval, T_STRING)) continue;
 
-	st_insert(_stackprof.sample_tag_buffer, (st_data_t) tag, (st_data_t) tagval);
+	st_insert(_stackprof.sample_tag_buffer, (st_data_t) SYM2ID(tag), (st_data_t) tagval);
     }
 }
 
