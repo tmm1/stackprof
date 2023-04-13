@@ -485,6 +485,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     _stackprof.last_tagset_matches = 0;
     _stackprof.overall_tags = 0;
     _stackprof.pending_tags = 0;
+    _stackprof.buffer_count = 0;
 
     if (_stackprof.raw && _stackprof.raw_samples_len) {
 	size_t len, n, o;
