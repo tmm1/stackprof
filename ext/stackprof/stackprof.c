@@ -125,7 +125,7 @@ static struct {
     st_table *sample_tag_buffer;
     st_table *tag_string_table;
     sample_tags_t *sample_tags;
-    void *current_thread_id; // TODO is this the best pointer type? :grimmace:
+    size_t current_thread_id;
 
     struct timestamp_t last_sample_at;
     sample_time_t *raw_sample_times;
@@ -275,7 +275,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.tag_source = tag_source;
     _stackprof.tag_strings = NULL;
     _stackprof.tags = tags;
-    _stackprof.current_thread_id = NULL;
+    _stackprof.current_thread_id = 0;
     _stackprof.last_tagset_matches = 0;
     _stackprof.overall_tags = 0;
     _stackprof.pending_tags = 0;
@@ -485,7 +485,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     _stackprof.tags = Qnil;
     _stackprof.tag_thread_id = Qfalse;
     _stackprof.last_tagset_matches = 0;
-    _stackprof.current_thread_id = NULL;
+    _stackprof.current_thread_id = 0;
     _stackprof.overall_tags = 0;
     _stackprof.pending_tags = 0;
     _stackprof.buffer_count = 0;
@@ -730,7 +730,7 @@ stackprof_record_tags_for_sample()
 	thread_val_str_id = string_id_for(StringValueCStr(thread_id));
 
 	st_insert(tag_data.tags, (st_data_t) thread_str_id, (st_data_t) thread_val_str_id);
-	_stackprof.current_thread_id = NULL;
+	_stackprof.current_thread_id = 0;
     }
 
     if (_stackprof.sample_tags_len > 0) {
@@ -913,7 +913,7 @@ stackprof_buffer_tags(void)
 	st_clear(_stackprof.sample_tag_buffer);
 
     if (_stackprof.tag_thread_id) {
-	_stackprof.current_thread_id = (void *) current_thread;
+	_stackprof.current_thread_id = (size_t) current_thread;
     }
 
     // Buffer all requested tags. Overhead increases with the cardinality of the set of tags to record
