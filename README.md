@@ -353,7 +353,8 @@ end
 Will result in tags like:
 
 ```
-[{}, {}, {}, {}, {}, {}, {:foo=>"bar"}, {:foo=>"bar"}, {:foo=>"bar"}, {:foo=>"bar"}, {}, {}, {}, {}, {}]
+> puts StackProf::Tags.from(profile).inspect
+=> [{}, {}, {}, {}, {}, {}, {:foo=>"bar"}, {:foo=>"bar"}, {:foo=>"bar"}, {:foo=>"bar"}, {}, {}, {}, {}, {}]
 ```
 
 Which can be used in analysis to filter for samples that match some label criteria.
@@ -365,14 +366,17 @@ a reference to the string table. This is what the raw values look like:
 
 ```
 irb> profile[:sample_tags]
-=> [{1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2, 3=>4}, {1=>2, 3=>4}, {1=>2, 3=>4}, {1=>2, 3=>4}, {1=>2, 3=>4}, {1=>2, 3=>4}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2}, {1=>2, 3=>5}, {1=>2, 3=>5}, {1=>2, 3=>5}, {1=>2, 3=>5}, {1=>2, 3=>5}, {1=>2, 3=>5}, ... ]
-
+=>  [{1=>2}, 14, {1=>2, 3=>4}, 4, {1=>2}, 12, {1=>2, 3=>5}, 13, {1=>2}, 6, {1=>2, 3=>4}, 3, {1=>2}, 20, {1=>2, 3=>5}, 14, {1=>2}, 7, {1=>2, 3=>4}, 5, {1=>2}, 8, {1=>2, 3=>5}, 10, {1=>2}, 8, {1=>2, 3=>4}, 3, {1=>2}, 8, {1=>2, 3=>5}, 13, {1=>2}, 13, {1=>2, 3=>4}, 4, {1=>2}, 10, {1=>2, 3=>5}, 13, {1=>2}, 7]
 irb> profile[:tag_strings]
-=> ["thread_id", "0x0000000100a4b158", "function", "fast", "slow"]
+=>  ["thread_id", "0x0000000102a9b138", "function", "fast", "slow"]
 ```
 
-We can decode this with a helper, `StackProf::Tags.from(profile)`, to map to
-the tag values:
+The hashes indicate a repeating tag set, and the integer which follows is the
+number of times that the tag set repeats consecutively. The sum of these numbers
+should equal the number of samples collected.
+
+Using a helper, `StackProf::Tags.from(profile)`, we can expand this to an array
+of the string values of these tags:
 
 ```
 irb> StackProf::Tags.from(profile)
