@@ -940,9 +940,9 @@ stackprof_buffer_tags(void)
 	tag_val_str_len = strlen(tag_val_c_str);
 	tag_val_str_len = tag_val_str_len > MAX_TAG_VAL_LEN ? MAX_TAG_VAL_LEN : tag_val_str_len;
 
-	strncpy(_stackprof.sample_tag_key_buffer[_stackprof.current_buffered_tags_count], tag_c_str, tag_str_len);
+	memcpy(_stackprof.sample_tag_key_buffer[_stackprof.current_buffered_tags_count], tag_c_str, tag_str_len);
 	_stackprof.sample_tag_key_buffer[_stackprof.current_buffered_tags_count][tag_str_len] = '\0';
-	strncpy(_stackprof.sample_tag_val_buffer[_stackprof.current_buffered_tags_count], tag_val_c_str, tag_val_str_len);
+	memcpy(_stackprof.sample_tag_val_buffer[_stackprof.current_buffered_tags_count], tag_val_c_str, tag_val_str_len);
 	_stackprof.sample_tag_val_buffer[_stackprof.current_buffered_tags_count][tag_val_str_len] = '\0';
 	_stackprof.current_buffered_tags_count++;
     }
