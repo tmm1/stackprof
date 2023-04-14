@@ -911,17 +911,15 @@ stackprof_buffer_tags(void)
 
     // Buffer all requested tags
     for(long n = 0; n <  RARRAY_LEN(_stackprof.tags); n++) {
-	tag = rb_ary_entry(_stackprof.tags, n);
-	if (!RB_TYPE_P(tag, T_SYMBOL)) continue;
-
 	if (!RTEST(_stackprof.tag_source)) return;
 	source_sym_id = rb_check_id(&_stackprof.tag_source);
 	if (!source_sym_id) return;
-
 	if (NIL_P(fiber_local_var))
 	    fiber_local_var = rb_thread_local_aref(current_ruby_thread, source_sym_id);
-
 	if (!RB_TYPE_P(fiber_local_var, T_HASH)) return;
+
+	tag = rb_ary_entry(_stackprof.tags, n);
+	if (!RB_TYPE_P(tag, T_SYMBOL)) continue;
 
 	tagval = rb_hash_aref(fiber_local_var, tag);
 
@@ -946,8 +944,6 @@ stackprof_buffer_tags(void)
 	_stackprof.sample_tag_key_buffer[_stackprof.current_buffered_tags_count][tag_str_len] = '\0';
 	strncpy(_stackprof.sample_tag_val_buffer[_stackprof.current_buffered_tags_count], tag_val_c_str, tag_val_str_len);
 	_stackprof.sample_tag_val_buffer[_stackprof.current_buffered_tags_count][tag_val_str_len] = '\0';
-	//printf("Buffered tag value %s -> %s for sample %lu in slot %lu \n", tag_c_str, tag_val_c_str, _stackprof.overall_samples, _stackprof.current_buffered_tags_count);
-
 	_stackprof.current_buffered_tags_count++;
     }
     _stackprof.buffered_tagsets++;
