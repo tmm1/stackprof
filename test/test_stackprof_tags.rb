@@ -249,9 +249,6 @@ class StackProfTagsTest < MiniTest::Test
                                     { thread_id: main_id }])
   end
 
-  # NB - this test is inherently flaky due to a race condition where it is
-  # possible a sample will be taken after the new thread starts, before the
-  # tags are inherited. It should be rare, and only affect a small number of samples
   def test_sample_tag_persistence_from_parent
     StackProf::Tag::Persistence.enable
     assert_equal true, StackProf::Tag::Persistence.enabled
@@ -283,13 +280,21 @@ class StackProfTagsTest < MiniTest::Test
     assert_equal profile[:samples], StackProf::Tags.from(profile).size
     assert_equal true, all_samples_have_tag(profile, :thread_id)
 
-    assert_equal true,
-                 tag_order_matches(profile,
-                                   [{ thread_id: main_id, foo: "bar", spam: "eggs" },
-                                    { thread_id: sub_id, foo: "bar", spam: "eggs" },
-                                    { thread_id: sub_id, foo: "baz", spam: "eggs" },
-                                    { thread_id: main_id, foo: "bar", spam: "eggs" },
-                                    { thread_id: main_id }])
+    allowed_orders = [
+      [{ thread_id: main_id, foo: "bar", spam: "eggs" },
+       { thread_id: sub_id, foo: "bar", spam: "eggs" },
+       { thread_id: sub_id, foo: "baz", spam: "eggs" },
+       { thread_id: main_id, foo: "bar", spam: "eggs" },
+       { thread_id: main_id }],
+      [{ thread_id: main_id, foo: "bar", spam: "eggs" },
+       { thread_id: sub_id }, # Covers race condition where a sample is taken before tags set in child
+       { thread_id: sub_id, foo: "bar", spam: "eggs" },
+       { thread_id: sub_id, foo: "baz", spam: "eggs" },
+       { thread_id: main_id, foo: "bar", spam: "eggs" },
+       { thread_id: main_id }]
+    ]
+
+    assert_equal true, tag_order_matches(profile, *allowed_orders)
 
     # Now let's disable it and verify things are back to normal
     StackProf::Tag.set(foo: :bar, spam: :eggs)
@@ -410,29 +415,34 @@ class StackProfTagsTest < MiniTest::Test
     end
   end
 
-  def tag_order_matches(profile, order)
+  def tag_order_matches(profile, *permitted_orders)
     debugstr = ''
     rc = false
-    return rc if order.empty?
-
-    idx = 0
     sampleIdx = 0
-    acceptable = nil
     next_acceptable = nil
+
+    return rc if permitted_orders.empty?
     sampleTags = StackProf::Tags.from(profile)
-    sampleTags.each do |tags|
-      sampleIdx += 1
-      acceptable = order[idx]
-      next unless tags != acceptable && idx < order.size
 
-      idx += 1
-      next_acceptable = order[idx]
-      debugstr += format("%02d/%02d: %s != %s, next %s\n", idx, order.size, tags, acceptable, next_acceptable)
-      break if tags != next_acceptable
+    permitted_orders.each_with_index do |order, orderIdx|
+      idx = 0
+      acceptable = nil
+      sampleTags.each do |tags|
+        sampleIdx += 1
+        acceptable = order[idx]
+        next unless tags != acceptable && idx < order.size
 
-      acceptable = next_acceptable
+        idx += 1
+        next_acceptable = order[idx]
+        debugstr += format("%02d/%02d: %s != %s, next %s (order %d)\n", idx, order.size, tags, acceptable, next_acceptable, orderIdx)
+        break if tags != next_acceptable
+
+        acceptable = next_acceptable
+      end
+      rc = idx == (order.size - 1)
+      return rc if rc
     end
-    rc = idx == (order.size - 1)
+    rc
   ensure
     unless rc
       puts "Failed on sample #{sampleIdx - 1}/#{sampleTags.size} -> #{sampleTags[sampleIdx-1]} != #{next_acceptable}"
