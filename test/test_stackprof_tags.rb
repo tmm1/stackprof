@@ -199,16 +199,20 @@ class StackProfTagsTest < MiniTest::Test
       StackProf.run(mode: :cpu, tags: too_many_tags) {}
     end
     assert_equal "exceeding maximum number of tags", error.message
-
   end
 
-  # TODO add test that sample tags that are contiguous are combined
   def test_no_tags_set
+    assert_operator StackProf::Tag.check, :==, { }
     profile = StackProf.run(mode: :cpu, tags: %i[foo]) do
+      assert_operator StackProf::Tag.check, :==, { }
       math
     end
+    assert_operator StackProf::Tag.check, :==, { }
+    assert_equal true, profile.key?(:sample_tags)
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
+    assert_equal true, StackProf::Tags.from(profile).all?{|t| t.empty?}
   end
-
 
   def test_tag_sample_from_tag_source_with_multiple_threads
     main_id = parse_thread_id(Thread.current)
@@ -393,13 +397,16 @@ class StackProfTagsTest < MiniTest::Test
     rc = tags.all? { |t| t.key?(tag) }
   ensure
     unless rc
-      puts "#{tags.count{ |t| !t.key?(tag) }}/#{tags.size} samples did not contain the tag #{tag}"
+      missing = tags.count{ |t| !t.key?(tag) }
+      puts "#{missing}/#{tags.size} samples did not contain the tag #{tag}"
       puts "GC samples: #{profile[:gc_samples]}"
       puts "Tags were: #{StackProf::Tags.from(profile).inspect}\nraw: #{profile[:sample_tags].inspect}\nstrtab: #{profile[:tag_strings].inspect}"
-      samplemap = parse_profile(profile)
-      #tags.each_with_index do |t, i|
-      #  puts "Sample missing tag #{tag}:\n#{samplemap[i].inspect}" unless t.key?(tag)
-      #end
+      if profile[:raw] && missing <= 5 # arbitrary limit to prevent spamming output
+        samplemap = parse_profile(profile)
+        tags.each_with_index do |t, i|
+          puts "Sample missing tag #{tag}:\n#{samplemap[i].inspect}" unless t.key?(tag)
+        end
+      end
     end
   end
 
