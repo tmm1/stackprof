@@ -19,6 +19,9 @@
 #include <pthread.h>
 
 #define BUF_SIZE 2048
+#define MAX_TAGS 16 // NOTE - arbitrary limit, setting it low until we can verify safety and usability
+#define MAX_TAG_KEY_LEN 128
+#define MAX_TAG_VAL_LEN 512
 #define MICROSECONDS_IN_SECOND 1000000
 #define NANOSECONDS_IN_SECOND 1000000000
 
@@ -112,21 +115,6 @@ static struct {
     size_t raw_samples_len;
     size_t raw_samples_capa;
     size_t raw_sample_index;
-
-    VALUE tags;
-    VALUE tag_source;
-    VALUE tag_thread_id;
-    char **tag_strings;
-    size_t tag_strings_len;
-    size_t tag_strings_capa;
-    size_t sample_tags_len;
-    size_t sample_tags_capa;
-    size_t last_tagset_matches;
-    st_table *sample_tag_buffer;
-    st_table *tag_string_table;
-    sample_tags_t *sample_tags;
-    size_t current_thread_id;
-
     struct timestamp_t last_sample_at;
     sample_time_t *raw_sample_times;
     size_t raw_sample_times_len;
@@ -135,7 +123,7 @@ static struct {
     size_t overall_signals;
     size_t overall_samples;
     size_t overall_tags;
-    size_t pending_tags;
+    size_t buffered_tagsets;
     size_t during_gc;
     size_t unrecorded_gc_samples;
     size_t unrecorded_gc_marking_samples;
@@ -150,7 +138,23 @@ static struct {
     VALUE frames_buffer[BUF_SIZE];
     int lines_buffer[BUF_SIZE];
 
-    pthread_t target_thread;
+    pthread_t target_thread; // TODO add a built-in to collect pthread id, so we can map ruby thread id to pthread in the tags
+
+    VALUE tags;
+    VALUE tag_source;
+    VALUE tag_thread_id;
+    char **tag_strings;
+    size_t tag_strings_len;
+    size_t tag_strings_capa;
+    size_t sample_tags_len;
+    size_t sample_tags_capa;
+    size_t last_tagset_matches;
+    size_t current_ruby_thread_id;
+    size_t current_buffered_tags_count;
+    st_table *tag_string_table;
+    sample_tags_t *sample_tags;
+    char sample_tag_key_buffer[MAX_TAGS][MAX_TAG_KEY_LEN];
+    char sample_tag_val_buffer[MAX_TAGS][MAX_TAG_VAL_LEN];
 } _stackprof;
 
 static VALUE sym_object, sym_wall, sym_cpu, sym_custom, sym_name, sym_file, sym_line;
@@ -160,7 +164,7 @@ static VALUE sym_aggregate, sym_raw_sample_timestamps, sym_raw_timestamp_deltas,
 static VALUE sym_gc_samples, objtracer;
 static VALUE sym__stackprof_tags, sym_sample_tags, sym_tag_source, sym_tags, sym_tag_strings, sym_thread_id;
 static VALUE gc_hook;
-static VALUE rb_mStackProf;
+static VALUE rb_mStackProf, rb_mStackProfTag;
 
 static void stackprof_newobj_handler(VALUE, void*);
 static void stackprof_signal_handler(int sig, siginfo_t* sinfo, void* ucontext);
@@ -170,7 +174,8 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 {
     struct sigaction sa;
     struct itimerval timer;
-    VALUE opts = Qnil, mode = Qnil, interval = Qnil, metadata = rb_hash_new(), out = Qfalse, tag_source = Qnil, tags = Qnil;
+    VALUE opts = Qnil, mode = Qnil, interval = Qnil, metadata = rb_hash_new(), out = Qfalse;
+    VALUE tag_source = Qnil, tags = Qnil;
     int ignore_gc = 0;
     int raw = 0, aggregate = 1;
     VALUE metadata_val;
@@ -213,6 +218,8 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	    tags = rb_hash_aref(opts, sym_tags);
 	    if (!RB_TYPE_P(tags, T_ARRAY))
 		rb_raise(rb_eArgError, "tags should be an array");
+	    if (RARRAY_LEN(tags) > MAX_TAGS)
+		rb_raise(rb_eArgError, "exceeding maximum number of tags");
 	    if (rb_ary_includes(tags, sym_thread_id)) {
 		rb_ary_delete(tags, sym_thread_id);
 		_stackprof.tag_thread_id = Qtrue;
@@ -233,10 +240,6 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	_stackprof.overall_signals = 0;
 	_stackprof.overall_samples = 0;
 	_stackprof.during_gc = 0;
-    }
-
-    if (!_stackprof.sample_tag_buffer) {
-        _stackprof.sample_tag_buffer = st_init_numtable();
     }
 
     if (mode == sym_object) {
@@ -274,11 +277,12 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.target_thread = pthread_self();
     _stackprof.tag_source = tag_source;
     _stackprof.tag_strings = NULL;
+    _stackprof.current_ruby_thread_id = 0;
     _stackprof.tags = tags;
-    _stackprof.current_thread_id = 0;
     _stackprof.last_tagset_matches = 0;
     _stackprof.overall_tags = 0;
-    _stackprof.pending_tags = 0;
+    _stackprof.buffered_tagsets = 0;
+    _stackprof.current_buffered_tags_count = 0;
 
     if (raw) {
 	capture_timestamp(&_stackprof.last_sample_at);
@@ -429,6 +433,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     rb_hash_aset(results, sym_samples, SIZET2NUM(_stackprof.overall_samples));
     rb_hash_aset(results, sym_gc_samples, SIZET2NUM(_stackprof.during_gc));
     rb_hash_aset(results, sym_missed_samples, SIZET2NUM(_stackprof.overall_signals - _stackprof.overall_samples));
+    //rb_hash_aset(results, sym_missed_samples, SIZET2NUM(_stackprof.overall_signals - _stackprof.overall_samples)); // TODO put the total number of samples in the output as otherwise it is a pain to compute
     rb_hash_aset(results, sym_metadata, _stackprof.metadata);
 
     _stackprof.metadata = Qnil;
@@ -462,7 +467,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 	if(_stackprof.buffer_count > 0)
 	    printf("DATA LEFT BUFFERED\n");
 	if(_stackprof.overall_tags != _stackprof.overall_samples)
-	    printf("MISSING TAGS %lu != %lu (pending: %lu)\n", _stackprof.overall_samples, _stackprof.overall_tags, _stackprof.pending_tags);
+	    printf("MISSING TAGS %lu != %lu (pending: %lu)\n", _stackprof.overall_samples, _stackprof.overall_tags, _stackprof.buffered_tagsets);
         sample_tags = rb_ary_new_capa(_stackprof.sample_tags_len);
         for (size_t n = 0; n < _stackprof.sample_tags_len; n++) {
 	    VALUE tags = rb_hash_new();
@@ -473,9 +478,6 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 	rb_hash_aset(results, sym_sample_tags, sample_tags);
     }
  
-    st_free_table(_stackprof.sample_tag_buffer);
-    _stackprof.sample_tag_buffer = NULL;
-
     free(_stackprof.sample_tags);
     _stackprof.record_tags = 0;
     _stackprof.sample_tags = NULL;
@@ -485,10 +487,11 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     _stackprof.tags = Qnil;
     _stackprof.tag_thread_id = Qfalse;
     _stackprof.last_tagset_matches = 0;
-    _stackprof.current_thread_id = 0;
+    _stackprof.current_ruby_thread_id = 0;
     _stackprof.overall_tags = 0;
-    _stackprof.pending_tags = 0;
+    _stackprof.buffered_tagsets = 0;
     _stackprof.buffer_count = 0;
+    _stackprof.current_buffered_tags_count = 0;
 
     if (_stackprof.raw && _stackprof.raw_samples_len) {
 	size_t len, n, o;
@@ -628,44 +631,20 @@ string_id_for(const char *str)
 }
 
 static int
-index_tag_i(st_data_t key, st_data_t val, st_data_t arg)
+index_tag_i(char *key, char *val, st_data_t arg)
 {
+    size_t key_id, val_id;
     st_table *tags = (st_table *)arg, *last_tagset = NULL;
-    const char *key_str = NULL, *val_str = NULL;
     VALUE previous_tagval;
 
-    if (tags == NULL || !RTEST(key) || !RTEST(val)) {
-	return ST_CONTINUE;
+    if (tags == NULL || key == NULL || val == NULL) {
+	return 1;
     }
 
-    /* TODO
-    - initialize the string table and string array buffer
-    - Look up key and value in the tag_string_table quickly
-    - If they are found, store the resulting integer
-    - If they are not found, add them to the back of tag_strings
-	- grow buffer if necessary using convention of doubling, starting at 100
-	- store result in string table
-    - Update results to also output the string table as an array of strings
-    - Update tests to dereference tags correctly
-    */
+    key_id = string_id_for(key);
+    val_id = string_id_for(val);
 
-    VALUE tmp = rb_str_new_cstr(rb_id2name(key));
-    key_str = StringValueCStr(tmp); // wrapped twice to get it null-terminated
-
-    // TODO replace with type switch?
-    if (RB_TYPE_P(val, T_STRING))
-	val_str = StringValueCStr(val);
-
-    if (RB_TYPE_P(val, T_SYMBOL))
-	val_str = rb_id2name(SYM2ID(val));
-
-    if (!val_str)
-	return ST_CONTINUE;
-
-    size_t key_id, val_id;
-    key_id = string_id_for(key_str);
-    val_id = string_id_for(val_str);
-
+    // Check if this tags matches the same value in the last recorded tag
     if (_stackprof.last_tagset_matches && _stackprof.sample_tags_len > 0) {
 	last_tagset = _stackprof.sample_tags[_stackprof.sample_tags_len-1].tags;
 	if (st_lookup(last_tagset, (st_data_t) key_id, &previous_tagval)) {
@@ -678,17 +657,19 @@ index_tag_i(st_data_t key, st_data_t val, st_data_t arg)
     }
 
     st_insert(tags, (st_data_t) key_id, (st_data_t) val_id);
-    return ST_CONTINUE;
+    return Qtrue;
 }
 
+/*
+Records tags that were buffered, storing them per-sample.
+*/
 static void
 stackprof_record_tags_for_sample(void)
 {
     VALUE thread_id = Qnil;
-    size_t thread_str_id = 0, thread_val_str_id = 0;
+    size_t thread_str_id = 0, thread_val_str_id = 0, i = 0;
     const char *sym_thread_id_str;
 
-    _stackprof.overall_tags++;
     // Allocate initial tag buffer
     if (!_stackprof.sample_tags) {
         _stackprof.sample_tags_capa = 100;
@@ -721,16 +702,18 @@ stackprof_record_tags_for_sample(void)
     };
 
     // If the thread ID should be recorded and we buffered it, store its string representation now
-    // TODO is there any we to get the thread name? Would be nice to append it if non-empty
-    if (_stackprof.tag_thread_id && _stackprof.current_thread_id) {
+    // TODO is there any we to get the thread name? Would be nice to append it if non-empty,
+    // but we would need to buffer it inside the interrupt in order to be able
+    // to record it here
+    if (_stackprof.tag_thread_id && _stackprof.current_ruby_thread_id) {
 	sym_thread_id_str = rb_id2name(SYM2ID(sym_thread_id));
-	thread_id = rb_sprintf("%p", (void *) _stackprof.current_thread_id);
+	thread_id = rb_sprintf("%p", (void *) _stackprof.current_ruby_thread_id);
 
 	thread_str_id = string_id_for(sym_thread_id_str);
 	thread_val_str_id = string_id_for(StringValueCStr(thread_id));
 
 	st_insert(tag_data.tags, (st_data_t) thread_str_id, (st_data_t) thread_val_str_id);
-	_stackprof.current_thread_id = 0;
+	_stackprof.current_ruby_thread_id = 0;
     }
 
     if (_stackprof.sample_tags_len > 0) {
@@ -738,29 +721,35 @@ stackprof_record_tags_for_sample(void)
 	
 	last_tag_data = &_stackprof.sample_tags[_stackprof.sample_tags_len-1];
 	
+	_stackprof.last_tagset_matches = 1;
 	if (thread_str_id && thread_val_str_id) {
 	    st_data_t val;
 	    if (st_lookup(last_tag_data->tags, thread_str_id, &val)) {
-	        _stackprof.last_tagset_matches = thread_val_str_id == (size_t) val;
-	    } else {
-	        _stackprof.last_tagset_matches = 1;
+	        _stackprof.last_tagset_matches &= thread_val_str_id == (size_t) val;
 	    }
 	}
 
-	tag_size = _stackprof.sample_tag_buffer->num_entries + tag_data.tags->num_entries;
+	tag_size = _stackprof.current_buffered_tags_count + tag_data.tags->num_entries;
 	last_size = last_tag_data->tags->num_entries;
         _stackprof.last_tagset_matches &= tag_size == last_size;
-	//printf("THIS SIZE %lu, LAST SIZE %lu\n", (size_t) tag_size, (size_t) last_size);
     }
-    st_foreach(_stackprof.sample_tag_buffer, index_tag_i, (st_data_t)tag_data.tags);
+
+
+    for(i=0; i < _stackprof.current_buffered_tags_count; i++) {
+	index_tag_i(_stackprof.sample_tag_key_buffer[i], _stackprof.sample_tag_val_buffer[i], (st_data_t)tag_data.tags);
+    }
+    _stackprof.current_buffered_tags_count = 0;
 
     if(_stackprof.last_tagset_matches) {
 	last_tag_data->repeats++;
-	// TODO do we need to clean up tag_data if we don't use it ?
     } else {
-        _stackprof.sample_tags[_stackprof.sample_tags_len++] = tag_data;
+	_stackprof.sample_tags[_stackprof.sample_tags_len++] = tag_data;
     }
-    _stackprof.pending_tags--;
+
+    if (_stackprof.buffered_tagsets > 0)
+	_stackprof.buffered_tagsets--;
+
+    _stackprof.overall_tags++;
 }
 
 void
@@ -770,10 +759,6 @@ stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t ti
     VALUE prev_frame = Qnil;
 
     _stackprof.overall_samples++;
-
-    if (_stackprof.record_tags) {
-	_stackprof.pending_tags++;
-    }
 
     if (_stackprof.raw && num > 0) {
 	int found = 0;
@@ -890,54 +875,82 @@ stackprof_buffer_tags collects tags from a fiber local variable if it is present
 
 The tags must be specified to stackprof start to initiate collection.
 
-:thread_id is a special tag that will read the thread ID per its string representation
+:thread_id is currently acts as a "built-in", providing the thread id of the
+sample that was captured.
 
-Otherwise, any other tags will be read from a fiber-local variable:
+Otherwise, symbol specified wil be read from a fiber-local variable, default:
 
-:stackprof_tags
+:_stackprof_tags
 
-Which may be overridden by passing :tag_source to Stackprof.run
-
-Any tags collected are stored in a pre-allocated buffer, to be recorded later.
+Note that everything called here must be signal-safe, see safe functions here:
+https://man7.org/linux/man-pages/man7/signal-safety.7.html
 */
+
 //static inline void
 static void
 stackprof_buffer_tags(void)
 {
-    VALUE tag, tagval, fiber_local_var = Qnil;
-    VALUE current_thread =  rb_thread_current();
-    ID id;
-    if(NIL_P(current_thread)) {
-	printf("NIL THREAD!\n");
+    VALUE tag = Qnil, tagval = Qnil, fiber_local_var = Qnil;
+    VALUE current_ruby_thread =  rb_thread_current();
+    const char *tag_c_str = NULL, *tag_val_c_str = NULL;
+    size_t tag_str_len = 0, tag_val_str_len = 0;
+    ID source_sym_id = Qnil;
+
+    // Return early if there is already a buffered tagset for a sample
+    if(_stackprof.buffered_tagsets > 0) return;
+
+    // This shouldn't be possible, but better to be safe than sorry
+    if(NIL_P(current_ruby_thread)) {
+	printf("IMPOSSIBLE - NIL THREAD!\n"); // TODO remove when done developing
 	return;
     }
 
-    if(_stackprof.sample_tag_buffer->num_entries > 0)
-	st_clear(_stackprof.sample_tag_buffer);
-
     if (_stackprof.tag_thread_id) {
-	_stackprof.current_thread_id = (size_t) current_thread;
+	_stackprof.current_ruby_thread_id = (size_t) current_ruby_thread;
     }
 
-    // Buffer all requested tags. Overhead increases with the cardinality of the set of tags to record
+    // Buffer all requested tags
     for(long n = 0; n <  RARRAY_LEN(_stackprof.tags); n++) {
 	tag = rb_ary_entry(_stackprof.tags, n);
 	if (!RB_TYPE_P(tag, T_SYMBOL)) continue;
 
 	if (!RTEST(_stackprof.tag_source)) return;
-	id = rb_check_id(&_stackprof.tag_source);
-	if (!id) return;
+	source_sym_id = rb_check_id(&_stackprof.tag_source);
+	if (!source_sym_id) return;
 
 	if (NIL_P(fiber_local_var))
-	    fiber_local_var = rb_thread_local_aref(current_thread, id);
+	    fiber_local_var = rb_thread_local_aref(current_ruby_thread, source_sym_id);
 
 	if (!RB_TYPE_P(fiber_local_var, T_HASH)) return;
 
 	tagval = rb_hash_aref(fiber_local_var, tag);
-	if (!RB_TYPE_P(tagval, T_SYMBOL) && !RB_TYPE_P(tagval, T_STRING)) continue;
 
-	st_insert(_stackprof.sample_tag_buffer, (st_data_t) SYM2ID(tag), (st_data_t) tagval);
+	switch (TYPE(tagval)) {
+	case T_SYMBOL:
+	    tag_val_c_str = rb_id2name(SYM2ID(tagval));
+	    break;
+	case T_STRING:
+	    tag_val_c_str = StringValueCStr(tagval);
+	    break;
+	default:
+	    continue;
+	}
+
+	tag_c_str = rb_id2name(SYM2ID(tag));
+	tag_str_len = strlen(tag_c_str);
+	tag_str_len = tag_str_len > MAX_TAG_KEY_LEN ? MAX_TAG_KEY_LEN : tag_str_len;
+	tag_val_str_len = strlen(tag_val_c_str);
+	tag_val_str_len = tag_val_str_len > MAX_TAG_VAL_LEN ? MAX_TAG_VAL_LEN : tag_val_str_len;
+
+	strncpy(_stackprof.sample_tag_key_buffer[_stackprof.current_buffered_tags_count], tag_c_str, tag_str_len);
+	_stackprof.sample_tag_key_buffer[_stackprof.current_buffered_tags_count][tag_str_len] = '\0';
+	strncpy(_stackprof.sample_tag_val_buffer[_stackprof.current_buffered_tags_count], tag_val_c_str, tag_val_str_len);
+	_stackprof.sample_tag_val_buffer[_stackprof.current_buffered_tags_count][tag_val_str_len] = '\0';
+	//printf("Buffered tag value %s -> %s for sample %lu in slot %lu \n", tag_c_str, tag_val_c_str, _stackprof.overall_samples, _stackprof.current_buffered_tags_count);
+
+	_stackprof.current_buffered_tags_count++;
     }
+    _stackprof.buffered_tagsets++;
 }
 
 // buffer the current profile frames
@@ -1301,7 +1314,12 @@ Init_stackprof(void)
     rb_define_singleton_method(rb_mStackProf, "results", stackprof_results, -1);
     rb_define_singleton_method(rb_mStackProf, "sample", stackprof_sample, 0);
     rb_define_singleton_method(rb_mStackProf, "use_postponed_job!", stackprof_use_postponed_job_l, 0);
-    rb_define_const(rb_mStackProf, "DEFAULT_TAG_SOURCE", sym__stackprof_tags); // TODO define this on StackProf::Tag
+
+    rb_mStackProfTag = rb_define_module_under(rb_mStackProf, "Tag");
+    rb_define_const(rb_mStackProfTag, "DEFAULT_TAG_SOURCE", sym__stackprof_tags);
+    rb_define_const(rb_mStackProfTag, "MAX_TAGS", INT2NUM(MAX_TAGS));
+    rb_define_const(rb_mStackProfTag, "MAX_TAG_KEY_LEN", INT2NUM(MAX_TAG_KEY_LEN));
+    rb_define_const(rb_mStackProfTag, "MAX_TAG_VAL_LEN", INT2NUM(MAX_TAG_VAL_LEN));
 
     pthread_atfork(stackprof_atfork_prepare, stackprof_atfork_parent, stackprof_atfork_child);
 }

@@ -39,13 +39,14 @@ module StackProf
     module Persistence
       extend self
 
-      attr_reader :enabled
+      attr_reader :enabled, :tag_source
 
-      def enable
+      def enable(tag_source: DEFAULT_TAG_SOURCE)
         @enabled ||= true
         @prepended ||= begin
           Thread.singleton_class.prepend(StackProf::Tag::ExtendedThread)
         end
+        @tag_source = tag_source
       end
 
       def disable
@@ -64,10 +65,10 @@ module StackProf
         return super(*args, &block) unless StackProf::Tag::Persistence.enabled
 
         wrap_block = begin
-          thread_vars = Thread.current[DEFAULT_TAG_SOURCE] # FIXME: read the tag source from module variable, don't assume it is default
+          thread_vars = Thread.current[StackProf::Tag::Persistence.tag_source]
           if thread_vars.is_a?(Hash) && !thread_vars.empty?
             wrap_block = proc do
-              Thread.current[DEFAULT_TAG_SOURCE] = thread_vars.dup
+              Thread.current[StackProf::Tag::Persistence.tag_source] = thread_vars.dup
               block.call
             end
           else

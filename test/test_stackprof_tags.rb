@@ -126,6 +126,90 @@ class StackProfTagsTest < MiniTest::Test
                                     {}])
   end
 
+  def test_tag_sample_in_thread
+    thread_id = ""
+    profile = StackProf.run(mode: :cpu, tags: %i[thread_id foo spam], raw: true) do
+      Thread.new do
+        thread_id = parse_thread_id(Thread.current)
+        assert_operator StackProf::Tag.check, :==, { }
+        math(10)
+        StackProf::Tag.set(foo: :bar)
+        assert_operator StackProf::Tag.check, :==, { foo: :bar }
+        math(10)
+        StackProf::Tag.set(foo: :bar, spam: "eggs")
+        assert_operator StackProf::Tag.check, :==, { foo: :bar, spam: "eggs" }
+        math(10)
+      end.join
+    end
+
+    assert_equal true, profile.key?(:sample_tags)
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
+    assert_equal true, all_samples_have_tag(profile, :thread_id)
+    assert_equal true,
+                 tag_order_matches(profile,
+                                   [{ thread_id: thread_id },
+                                    { thread_id: thread_id, foo: "bar" },
+                                    { thread_id: thread_id, foo: "bar", spam: "eggs" }])
+  end
+
+  def test_truncate_tags_exceeding_length
+    max_tags = StackProf::Tag::MAX_TAGS
+    max_key_len = StackProf::Tag::MAX_TAG_KEY_LEN
+    max_val_len = StackProf::Tag::MAX_TAG_VAL_LEN
+
+    too_long_key = ("a" * (max_key_len + 1)).to_sym
+    truncated_key = ("a" * (max_key_len)).to_sym
+    StackProf::Tag.set(too_long_key => :bar)
+    assert_operator StackProf::Tag.check, :==, { too_long_key => :bar }
+    profile = StackProf.run(mode: :cpu, tags: [too_long_key]) do
+      math(10)
+    end
+    StackProf::Tag.clear
+    assert_operator StackProf::Tag.check, :==, { }
+
+    assert_equal true, profile.key?(:sample_tags)
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
+    assert_equal true, all_samples_have_tag(profile, truncated_key)
+    assert_equal true,
+                 tag_order_matches(profile,
+                                   [{ truncated_key => "bar" }])
+
+    too_long_val = ("a" * (max_val_len + 1))
+    truncated_val = ("a" * (max_val_len))
+    StackProf::Tag.set(foo: too_long_val)
+    assert_operator StackProf::Tag.check, :==, { foo: too_long_val }
+    profile = StackProf.run(mode: :cpu, tags: %i[foo]) do
+      math(10)
+    end
+    StackProf::Tag.clear
+    assert_operator StackProf::Tag.check, :==, { }
+
+    assert_equal true, profile.key?(:sample_tags)
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
+    assert_equal true, all_samples_have_tag(profile, :foo)
+    assert_equal true,
+                 tag_order_matches(profile,
+                                   [{ foo: truncated_val }])
+
+    too_many_tags = (max_tags + 1).times.map { :tag }
+    error = assert_raises(ArgumentError) do
+      StackProf.run(mode: :cpu, tags: too_many_tags) {}
+    end
+    assert_equal "exceeding maximum number of tags", error.message
+
+  end
+
+  # TODO add test that sample tags that are contiguous are combined
+  def test_no_tags_set
+    profile = StackProf.run(mode: :cpu, tags: %i[foo]) do
+      math
+    end
+  end
+
+
   def test_tag_sample_from_tag_source_with_multiple_threads
     main_id = parse_thread_id(Thread.current)
     sub_id = ''
@@ -313,9 +397,9 @@ class StackProfTagsTest < MiniTest::Test
       puts "GC samples: #{profile[:gc_samples]}"
       puts "Tags were: #{StackProf::Tags.from(profile).inspect}\nraw: #{profile[:sample_tags].inspect}\nstrtab: #{profile[:tag_strings].inspect}"
       samplemap = parse_profile(profile)
-      tags.each_with_index do |t, i|
-        puts "Sample missing tag #{tag}:\n#{samplemap[i].inspect}" unless t.key?(tag)
-      end
+      #tags.each_with_index do |t, i|
+      #  puts "Sample missing tag #{tag}:\n#{samplemap[i].inspect}" unless t.key?(tag)
+      #end
     end
   end
 
