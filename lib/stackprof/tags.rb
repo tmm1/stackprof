@@ -30,5 +30,77 @@ module StackProf
         (Thread.current[tag_source] || {}).dup
       end
     end
+
+    # Persistence provides a singleton to toggle inheriting tags from parent thread
+    # at the time of thread creation, afterwhich, they will diverge.
+    # It achieves this by monkey-patching Thread.new, however, which is why this
+    # defaults to disabled.
+    # Tag Persistence is useful if you want to ensure that tags set globally
+    # will show up in all samples, regardless of what thread is being recorded.
+    module Persistence
+      extend self
+
+      attr_reader :enabled, :tag_source
+
+      def enable(tag_source: DEFAULT_TAG_SOURCE)
+        @enabled ||= true
+        @prepended ||= begin
+          Thread.singleton_class.prepend(StackProf::Tag::ExtendedThread)
+        end
+        @tag_source = tag_source
+      end
+
+      def disable
+        # puts "Disabling tag persistence"
+        @enabled = false
+      end
+    end
+
+    # ExtendedThread wraps Thread.new constructor in order to toggle inheritence
+    # of a specific thread local value
+    # NB - this is **racy**:  it is possible that a small number of samples
+    # in the child thread will be missing the tags, if the sample is taken
+    # after the thread is created, and before the vars are set. This is rare, but
+    # happens often enough to cause flakes in CI.
+    module ExtendedThread
+      def new(*args, &block)
+        return super(*args, &block) unless StackProf::Tag::Persistence.enabled
+
+        wrap_block = begin
+          thread_vars = Thread.current[StackProf::Tag::Persistence.tag_source]
+          if thread_vars.is_a?(Hash) && !thread_vars.empty?
+            wrap_block = proc do
+              Thread.current[StackProf::Tag::Persistence.tag_source] = thread_vars.dup
+              block.call
+            end
+          else
+            block
+          end
+        end
+        super(*args, &wrap_block)
+      end
+    end
+  end
+
+  module Tags
+    module_function
+
+    def from(profile)
+      if profile[:num_tags] != profile[:samples]
+        raise "invalid profile - number of tags #{profile[:num_tags]} not equal to number of samples #{profile[:samples]}"
+      end
+
+      expanded = profile[:sample_tags].each_slice(2).map { |v, n| n.times.map { v } }.flatten
+      tags = expanded.map do |t|
+        t.map do |k, v|
+          [profile[:tag_strings][k].to_sym, profile[:tag_strings][v]]
+        end.to_h
+      end
+      if tags.size != profile[:num_tags]
+        raise "invalid tag data - tag cardinality #{tags.size} not equal to expected #{profile[:num_tags]}"
+      end
+
+      tags
+    end
   end
 end

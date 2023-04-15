@@ -319,6 +319,90 @@ class StackProfTagsTest < MiniTest::Test
     end
   end
 
+  def test_sample_tag_persistence_from_parent
+    StackProf::Tag::Persistence.enable
+    assert_equal true, StackProf::Tag::Persistence.enabled
+
+    main_id = parse_thread_id(Thread.current)
+    sub_id = ''
+
+    StackProf::Tag.set(foo: :bar, spam: :eggs)
+    assert_operator StackProf::Tag.check, :==, { foo: :bar, spam: :eggs }
+
+    profile = StackProf.run(mode: :cpu, tags: %i[thread_id foo spam], raw: true) do
+      math(10)
+      Thread.new do
+        sub_id = parse_thread_id(Thread.current)
+        assert_operator StackProf::Tag.check, :==, { foo: :bar, spam: :eggs }
+        math(10)
+        StackProf::Tag.set(foo: :baz)
+        assert_operator StackProf::Tag.check, :==, { foo: :baz, spam: :eggs }
+        math(10)
+      end.join
+      math(10)
+      StackProf::Tag.clear
+      assert_operator StackProf::Tag.check, :==, {}
+      math(10)
+    end
+
+    assert_equal true, profile.key?(:sample_tags)
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
+    assert_equal true, all_samples_have_tag(profile, :thread_id)
+
+    allowed_orders = [
+      [{ thread_id: main_id, foo: "bar", spam: "eggs" },
+       { thread_id: sub_id, foo: "bar", spam: "eggs" },
+       { thread_id: sub_id, foo: "baz", spam: "eggs" },
+       { thread_id: main_id, foo: "bar", spam: "eggs" },
+       { thread_id: main_id }],
+      [{ thread_id: main_id, foo: "bar", spam: "eggs" },
+       { thread_id: sub_id }, # Covers race condition where a sample is taken before tags set in child
+       { thread_id: sub_id, foo: "bar", spam: "eggs" },
+       { thread_id: sub_id, foo: "baz", spam: "eggs" },
+       { thread_id: main_id, foo: "bar", spam: "eggs" },
+       { thread_id: main_id }]
+    ]
+
+    assert_equal true, tag_order_matches(profile, *allowed_orders)
+
+    # Now let's disable it and verify things are back to normal
+    StackProf::Tag.set(foo: :bar, spam: :eggs)
+    assert_operator StackProf::Tag.check, :==, { foo: :bar, spam: :eggs }
+
+    StackProf::Tag::Persistence.disable
+    assert_equal false, StackProf::Tag::Persistence.enabled
+
+    profile = StackProf.run(mode: :cpu, tags: %i[thread_id foo spam], raw: true) do
+      math(10)
+      Thread.new do
+        sub_id = parse_thread_id(Thread.current)
+        assert_operator StackProf::Tag.check, :==, { }
+        math(10)
+        StackProf::Tag.set(foo: :baz)
+        assert_operator StackProf::Tag.check, :==, { foo: :baz }
+        math(10)
+      end.join
+      math(10)
+      StackProf::Tag.clear
+      assert_operator StackProf::Tag.check, :==, {}
+      math(10)
+    end
+
+    assert_equal true, profile.key?(:sample_tags)
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
+    assert_equal true, all_samples_have_tag(profile, :thread_id)
+
+    assert_equal true,
+                 tag_order_matches(profile,
+                                   [{ thread_id: main_id, foo: "bar", spam: "eggs" },
+                                    { thread_id: sub_id },
+                                    { thread_id: sub_id, foo: "baz" },
+                                    { thread_id: main_id, foo: "bar", spam: "eggs" },
+                                    { thread_id: main_id }])
+  end
+
   private
 
   def math(n = 1)
