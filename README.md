@@ -324,6 +324,92 @@ StackProf.stop
 StackProf.results('/tmp/some.file')
 ```
 
+## Tagging samples
+
+It may be helpful to capture additional metadata while the stackprof interrupt
+is being processed which is relevant to that specific sample, as opposed to the
+global metadata set at the profile level with the `metadata` option. For instance,
+knowing the thread id associated with the stack, or other metadata such as
+the active request id, controller or action name, etc.
+
+This can be achieved by storing String or Symbol variables in a fiber-local
+dictionary. When a sample is collected, a specific list of tags can be checked
+against this tag source. If a value is found, it is recorded and alongside the
+stack trace it collects before exiting from the interrupt. There should be a
+tag set for every sample if any tags are specified to be collected.
+
+For example, the following code:
+
+```ruby
+profile = StackProf.run(mode: :cpu, tags: [:foo]) do
+  math
+  StackProf::Tag.with(foo: :bar) do
+    math
+  end
+  math
+end
+```
+
+Will result in tags like:
+
+```
+> puts StackProf::Tags.from(profile).inspect
+=> [{}, {}, {}, {}, {}, {}, {:foo=>"bar"}, {:foo=>"bar"}, {:foo=>"bar"}, {:foo=>"bar"}, {}, {}, {}, {}, {}]
+```
+
+Which can be used in analysis to filter for samples that match some label criteria.
+
+There should be at tag set per sample, which can be mapped to individual samples
+in the `raw` field to see what callchain they are for.
+
+When recording with stackprof, the special tag `:thread_id` will indicate to
+record the id of the thread that the profile was collected for before recording
+any other tags. Likewise, their is a corresponding builtin for `:fiber_id`.
+
+```ruby
+StackProf::Tag.with(foo: :bar, &block) # sets the tag :foo, to value :bar while executing a block, then unsets it
+StackProf::Tag.set(foo: :bar)          # sets the tag :foo, to value :bar
+StackProf::Tag.unset(:foo)             # unsets the tag :foo, if set
+StackProf::Tag.clear                   # clears all tags
+StackProf::Tag::Persistence.enable     # when a new thread is created, toggle this to have it seed its tag set from its parent
+```
+
+By default, tags are stored in a special variable with the magic name `:__stackprof_tags`.
+This can be overridden by specifying `:tag_source`, though should not normally
+need to be.
+
+#### Viewing tags
+
+To minimize redundancy, two optimizations are undertaken when storing tags:
+
+- Repeated contiguous tags sets that are identical are not duplicated, instead,
+the number of times it repeats is recorded on the assumption tags are likely
+to be identical to their neighbors.
+- Tags are represented as integers, which are indices into a string table. This
+allows for fast comparison operations, and reduces unecessary duplication.
+
+This means that tags cannot be viewed directly in the results, instead, this
+representation is shown:
+
+```
+irb> profile[:sample_tags]
+=>  [{1=>2}, 14, {1=>2, 3=>4}, 4, {1=>2}, 12, {1=>2, 3=>5}, 13, {1=>2}, 6, {1=>2, 3=>4}, 3, {1=>2}, 20, {1=>2, 3=>5}, 14, {1=>2}, 7, {1=>2, 3=>4}, 5, {1=>2}, 8, {1=>2, 3=>5}, 10, {1=>2}, 8, {1=>2, 3=>4}, 3, {1=>2}, 8, {1=>2, 3=>5}, 13, {1=>2}, 13, {1=>2, 3=>4}, 4, {1=>2}, 10, {1=>2, 3=>5}, 13, {1=>2}, 7]
+irb> profile[:tag_strings]
+=>  ["", "thread_id", "0x0000000102a9b138", "function", "fast", "slow"]
+```
+
+The hashes indicate a repeating tag set, and the integer which follows is the
+number of times that the tag set repeats consecutively. The sum of these numbers
+should equal the number of samples collected.
+
+Using a helper, `StackProf::Tags.from(profile)`, we can expand this to an array
+of the string values of these tags:
+
+```
+irb> StackProf::Tags.from(profile)
+=> [{:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118"}, {:thread_id=>"0x0000000102ddb118", :function=>"fast"}, {:thread_id=>"0x0000000102ddb118", :function=>"fast"}, {:thread_id=>"0x0000000102ddb118", :function=>"fast"}, {:thread_id=>"0x0000000102ddb118", :function=>"fast"}, {:thread_id=>"0x0000000102ddb118", :function=>"fast"}, ... ]
+```
+
 ## All options
 
 `StackProf.run` accepts an options hash. Currently, the following options are recognized:
@@ -337,6 +423,8 @@ Option      | Meaning
 `aggregate` | Defaults: `true` - if `false` disables [aggregation](#aggregation)
 `raw`       | Defaults `false` - if `true` collects the extra data required by the `--flamegraph` and `--stackcollapse` report types
 `metadata`  | Defaults to `{}`. Must be a `Hash`. metadata associated with this profile
+`tags`      | Defaults to `[]`. Must be an `Array` containing only `Symbol` elements. tags that should be read from the default or specified tag source
+`tag_source`| Defaults to `:_stackprof_tags`. Must be a `Symbol`. this will be identity of the fiber local variable to check for tags
 `save_every`| (Rack middleware only) write the target file after this many requests
 
 ## Todo
