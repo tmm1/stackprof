@@ -262,18 +262,6 @@ class StackProfTagsTest < MiniTest::Test
   end
 
   def test_tagged_funtions_do_not_skew
-    def fast_function
-      StackProf::Tag.with(function: :fast) do
-        math(2)
-      end
-    end
-
-    def slow_function
-      StackProf::Tag.with(function: :slow) do
-        math(8)
-      end
-    end
-
     profile = StackProf.run(mode: :cpu, tags: %i[thread_id function], raw: true) do
       5.times do
         math(5)
@@ -313,6 +301,56 @@ class StackProfTagsTest < MiniTest::Test
         assert_equal true, samples[i].any? { |f| f.include?('fast_function') }
         assert_equal true, samples[i].all? { |f| !f.include?('slow_function') }
       elsif function == :slow
+        assert_equal true, samples[i].any? { |f| f.include?('slow_function') }
+        assert_equal true, samples[i].all? { |f| !f.include?('fast_function') }
+      end
+    end
+  end
+
+  def test_tagged_funtions_do_not_skew_with_concurrent_threads
+    tid1 = tid2 = ""
+    profile = StackProf.run(mode: :cpu, tags: %i[thread_id function], raw: true) do
+      t1 = Thread.new do
+        5.times do
+          fast_function
+          Thread.pass
+        end
+      end
+      t2 = Thread.new do
+        5.times do
+          slow_function
+          Thread.pass
+        end
+      end
+      tid1 = parse_thread_id(t1)
+      tid2 = parse_thread_id(t2)
+      t1.join
+      t2.join
+    end
+
+    assert_equal true, profile.key?(:sample_tags)
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
+    assert_equal true, all_samples_have_tag(profile, :thread_id)
+
+    samples = parse_profile(profile)
+
+    sample_tags = StackProf::Tags.from(profile)
+    i = 0
+    while i < profile[:samples]
+      tags = sample_tags[i]
+      i += 1
+      function = tags[:function]
+      tid = tags[:thread_id]
+      next unless function
+
+      # Ensure that none of the samples are mis-tagged
+      if function == :fast
+        assert_equal tid1, tid
+        assert_equal true, samples[i].any? { |f| f.include?('fast_function') }
+        assert_equal true, samples[i].all? { |f| !f.include?('slow_function') }
+      elsif function == :slow
+        assert_equal tid2, tid
         assert_equal true, samples[i].any? { |f| f.include?('slow_function') }
         assert_equal true, samples[i].all? { |f| !f.include?('fast_function') }
       end
@@ -404,6 +442,18 @@ class StackProfTagsTest < MiniTest::Test
   end
 
   private
+
+  def fast_function
+    StackProf::Tag.with(function: :fast) do
+      math(2)
+    end
+  end
+
+  def slow_function
+    StackProf::Tag.with(function: :slow) do
+      math(8)
+    end
+  end
 
   def math(n = 1)
     base = 250_000
