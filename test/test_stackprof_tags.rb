@@ -3,6 +3,7 @@
 $LOAD_PATH.unshift File.expand_path('../lib', __dir__)
 require 'stackprof'
 require 'minitest/autorun'
+require 'fiber' # Needed for "Fiber.current" on ruby versions < 3.1
 
 class StackProfTagsTest < MiniTest::Test
   def teardown
@@ -211,6 +212,12 @@ class StackProfTagsTest < MiniTest::Test
       StackProf.run(mode: :cpu, tags: too_many_tags) {}
     end
     assert_equal 'exceeding maximum number of tags', error.message
+
+    # It should not count builtins like fiber and thread id towards the maximum tag count
+    builtins_with_max_tags = (max_tags).times.map { :tag }
+    builtins_with_max_tags  << :thread_id
+    builtins_with_max_tags  << :fiber_id
+    StackProf.run(mode: :cpu, tags: builtins_with_max_tags) {}
   end
 
   def test_no_tags_set
@@ -260,6 +267,44 @@ class StackProfTagsTest < MiniTest::Test
                                     { thread_id: main_id, foo: 'bar' },
                                     { thread_id: main_id }])
   end
+
+  def test_tag_sample_from_tag_source_with_multiple_fibers
+    main_id = parse_fiber_id(Fiber.current)
+    sub_id = ''
+    StackProf::Tag.set(foo: :bar)
+
+    profile = StackProf.run(mode: :wall, tags: %i[fiber_id foo], raw: true) do
+      assert_operator StackProf::Tag.check, :==, { foo: :bar }
+      math
+      Fiber.new do
+        sub_id = parse_fiber_id(Fiber.current)
+        assert_operator StackProf::Tag.check, :==, {}
+        math
+        StackProf::Tag.set(foo: :baz)
+        assert_operator StackProf::Tag.check, :==, { foo: :baz }
+        math
+      end.resume
+      assert_operator StackProf::Tag.check, :==, { foo: :bar }
+      math
+      StackProf::Tag.clear
+      assert_operator StackProf::Tag.check, :==, {}
+      math
+    end
+
+    assert_equal true, profile.key?(:sample_tags)
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
+    assert_equal true, all_samples_have_tag(profile, :fiber_id)
+    assert_equal true,
+                 tag_order_matches(profile,
+                                   [{ fiber_id: main_id, foo: 'bar' },
+                                    { fiber_id: sub_id },
+                                    { fiber_id: sub_id, foo: 'baz' },
+                                    { fiber_id: main_id, foo: 'bar' },
+                                    { fiber_id: main_id }])
+  end
+
+
 
   def test_tagged_funtions_do_not_skew
     profile = StackProf.run(mode: :cpu, tags: %i[thread_id function], raw: true) do
@@ -464,6 +509,10 @@ class StackProfTagsTest < MiniTest::Test
 
   def parse_thread_id(thread)
     thread.to_s.scan(/#<Thread:(\w*)/).flatten.first
+  end
+
+  def parse_fiber_id(fiber)
+    fiber.to_s.scan(/#<Fiber:(\w*)/).flatten.first
   end
 
   def all_samples_have_tag(profile, tag)

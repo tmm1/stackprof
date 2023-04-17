@@ -144,6 +144,7 @@ static struct {
     VALUE tags;
     VALUE tag_source;
     VALUE tag_thread_id;
+    VALUE tag_fiber_id;
     char **tag_strings;
     size_t tag_strings_len;
     size_t tag_strings_capa;
@@ -151,6 +152,7 @@ static struct {
     size_t sample_tags_capa;
     size_t last_tagset_matches;
     size_t current_ruby_thread_id;
+    size_t current_ruby_fiber_id;
     size_t current_buffered_tags_count;
     st_table *tag_string_table;
     sample_tags_t *sample_tags;
@@ -163,7 +165,7 @@ static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_
 static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_metadata, sym_frames, sym_ignore_gc, sym_out;
 static VALUE sym_aggregate, sym_raw_sample_timestamps, sym_raw_timestamp_deltas, sym_state, sym_marking, sym_sweeping;
 static VALUE sym_gc_samples, objtracer;
-static VALUE sym___stackprof_tags, sym_sample_tags, sym_tag_source, sym_tags, sym_num_tags, sym_tag_strings, sym_thread_id;
+static VALUE sym___stackprof_tags, sym_sample_tags, sym_tag_source, sym_tags, sym_num_tags, sym_tag_strings, sym_thread_id, sym_fiber_id;
 static VALUE gc_hook;
 static VALUE rb_mStackProf, rb_mStackProfTag;
 
@@ -223,12 +225,16 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
             tags = rb_hash_aref(opts, sym_tags);
             if (!RB_TYPE_P(tags, T_ARRAY))
                 rb_raise(rb_eArgError, "tags should be an array");
-            if (RARRAY_LEN(tags) > MAX_TAGS)
-                rb_raise(rb_eArgError, "exceeding maximum number of tags");
             if (rb_ary_includes(tags, sym_thread_id)) {
                 rb_ary_delete(tags, sym_thread_id);
                 _stackprof.tag_thread_id = Qtrue;
             }
+            if (rb_ary_includes(tags, sym_fiber_id)) {
+                rb_ary_delete(tags, sym_fiber_id);
+                _stackprof.tag_fiber_id = Qtrue;
+            }
+            if (RARRAY_LEN(tags) > MAX_TAGS)
+                rb_raise(rb_eArgError, "exceeding maximum number of tags");
             _stackprof.record_tags = 1;
         }
 
@@ -283,6 +289,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.tag_source = tag_source;
     _stackprof.tag_strings = NULL;
     _stackprof.current_ruby_thread_id = 0;
+    _stackprof.current_ruby_fiber_id = 0;
     _stackprof.tags = tags;
     _stackprof.last_tagset_matches = 0;
     _stackprof.overall_tags = 0;
@@ -486,6 +493,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     _stackprof.tag_source = Qnil;
     _stackprof.tags = Qnil;
     _stackprof.tag_thread_id = Qfalse;
+    _stackprof.tag_fiber_id = Qfalse;
     _stackprof.last_tagset_matches = 0;
     _stackprof.current_ruby_thread_id = 0;
     _stackprof.overall_tags = 0;
@@ -656,9 +664,10 @@ index_tag_i(char *key, char *val, st_data_t arg)
 static void
 stackprof_record_tags_for_sample(void)
 {
-    VALUE thread_id = Qnil;
+    VALUE thread_id = Qnil, fiber_id = 0;
     size_t thread_str_id = 0, thread_val_str_id = 0, i = 0;
-    const char *sym_thread_id_str;
+    size_t fiber_str_id = 0, fiber_val_str_id = 0;
+    const char *sym_thread_id_str, *sym_fiber_id_str;
 
     // Allocate initial tag buffer
     if (!_stackprof.sample_tags) {
@@ -698,12 +707,18 @@ stackprof_record_tags_for_sample(void)
     if (_stackprof.tag_thread_id && _stackprof.current_ruby_thread_id) {
         sym_thread_id_str = rb_id2name(SYM2ID(sym_thread_id));
         thread_id = rb_sprintf("%p", (void *)_stackprof.current_ruby_thread_id);
-
         thread_str_id = string_id_for(sym_thread_id_str);
         thread_val_str_id = string_id_for(StringValueCStr(thread_id));
-
         st_insert(tag_data.tags, (st_data_t)thread_str_id, (st_data_t)thread_val_str_id);
         _stackprof.current_ruby_thread_id = 0;
+    }
+    if (_stackprof.tag_fiber_id && _stackprof.current_ruby_fiber_id) {
+        sym_fiber_id_str = rb_id2name(SYM2ID(sym_fiber_id));
+        fiber_id = rb_sprintf("%p", (void *)_stackprof.current_ruby_fiber_id);
+        fiber_str_id = string_id_for(sym_fiber_id_str);
+        fiber_val_str_id = string_id_for(StringValueCStr(fiber_id));
+        st_insert(tag_data.tags, (st_data_t)fiber_str_id, (st_data_t)fiber_val_str_id);
+        _stackprof.current_ruby_fiber_id = 0;
     }
 
     if (_stackprof.sample_tags_len > 0) {
@@ -872,7 +887,7 @@ static void
 stackprof_buffer_tags(void)
 {
     VALUE tag = Qnil, tagval = Qnil, fiber_local_var = Qnil;
-    VALUE current_ruby_thread = Qnil;
+    VALUE current_ruby_thread = Qnil, current_ruby_fiber = Qnil;
     const char *tag_c_str = NULL, *tag_val_c_str = NULL;
     size_t tag_str_len = 0, tag_val_str_len = 0;
     ID source_sym_id = Qnil;
@@ -884,6 +899,10 @@ stackprof_buffer_tags(void)
     if (NIL_P(current_ruby_thread)) return;
     if (_stackprof.tag_thread_id) {
         _stackprof.current_ruby_thread_id = (size_t)current_ruby_thread;
+    }
+    if (_stackprof.tag_fiber_id) {
+	current_ruby_fiber = rb_fiber_current();
+        _stackprof.current_ruby_fiber_id = (size_t)current_ruby_fiber;
     }
 
     // Buffer all requested tags
@@ -1248,6 +1267,7 @@ Init_stackprof(void)
     S(tag_strings);
     S(tags);
     S(thread_id);
+    S(fiber_id);
     S(__stackprof_tags);
 #undef S
 
