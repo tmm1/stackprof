@@ -45,7 +45,7 @@ class StackProfTagsTest < MiniTest::Test
   end
 
   def test_tag_thread_id
-    profile = StackProf.run(mode: :wall, tags: [:thread_id], raw: true) do # FIXME: try :wall to make tests faster
+    profile = StackProf.run(tags: [:thread_id], raw: true) do # FIXME: try :wall to make tests faster
       assert_operator StackProf::Tag.check, :==, {}
       math(10)
     end
@@ -58,13 +58,13 @@ class StackProfTagsTest < MiniTest::Test
   end
 
   def test_tag_with_helper
-    profile = StackProf.run(mode: :cpu, tags: [:foo], raw: true) do
-      math(10)
+    profile = StackProf.run(tags: [:foo]) do
+      math
       StackProf::Tag.with(foo: :bar) do
         assert_operator StackProf::Tag.check, :==, { foo: :bar }
-        math(10)
+        math
       end
-      math(10)
+      math
     end
 
     assert_equal true, profile.key?(:sample_tags)
@@ -76,9 +76,9 @@ class StackProfTagsTest < MiniTest::Test
   def test_tag_sample_from_custom_tag_source
     custom_tag_source = :my_custom_tag_source
     StackProf::Tag.set(foo: :bar, tag_source: custom_tag_source)
-    profile = StackProf.run(mode: :cpu, tags: [:foo], tag_source: custom_tag_source, raw: true) do
+    profile = StackProf.run(tags: [:foo], tag_source: custom_tag_source) do
       assert_operator StackProf::Tag.check(tag_source: custom_tag_source), :==, { foo: :bar }
-      math(10)
+      math
     end
 
     assert_equal true, profile.key?(:sample_tags)
@@ -91,9 +91,9 @@ class StackProfTagsTest < MiniTest::Test
   def test_tag_sample_with_symbol_or_string
     StackProf::Tag.set(foo: :bar, spam: 'a lot')
 
-    profile = StackProf.run(mode: :cpu, tags: %i[foo spam], raw: true) do
+    profile = StackProf.run(tags: %i[foo spam], raw: true) do
       assert_operator StackProf::Tag.check, :==, { foo: :bar, spam: 'a lot' }
-      math(10)
+      math
     end
 
     assert_equal true, profile.key?(:sample_tags)
@@ -106,23 +106,23 @@ class StackProfTagsTest < MiniTest::Test
   end
 
   def test_tag_samples_with_tags_as_closure
-    profile = StackProf.run(mode: :cpu, tags: %i[foo spam], raw: true) do
-      math(10)
+    profile = StackProf.run(tags: %i[foo spam]) do
+      math
       StackProf::Tag.with(foo: :bar) do
         assert_operator StackProf::Tag.check, :==, { foo: :bar }
-        math(10)
+        math
         StackProf::Tag.with(foo: :baz) do
           assert_operator StackProf::Tag.check, :==, { foo: :baz }
-          math(10)
+          math
           StackProf::Tag.with(spam: :eggs) do
             assert_operator StackProf::Tag.check, :==, { foo: :baz, spam: :eggs }
-            math(10)
+            math
           end
-          math(10)
+          math
         end
-        math(10)
+        math
       end
-      math(10)
+      math
     end
 
     assert_equal true, profile.key?(:sample_tags)
@@ -145,13 +145,13 @@ class StackProfTagsTest < MiniTest::Test
       Thread.new do
         thread_id = parse_thread_id(Thread.current)
         assert_operator StackProf::Tag.check, :==, {}
-        math(10)
+        math(2)
         StackProf::Tag.set(foo: :bar)
         assert_operator StackProf::Tag.check, :==, { foo: :bar }
-        math(10)
+        math(2)
         StackProf::Tag.set(foo: :bar, spam: 'eggs')
         assert_operator StackProf::Tag.check, :==, { foo: :bar, spam: 'eggs' }
-        math(10)
+        math(2)
       end.join
     end
 
@@ -175,8 +175,8 @@ class StackProfTagsTest < MiniTest::Test
     truncated_key = ('a' * max_key_len).to_sym
     StackProf::Tag.set(too_long_key => :bar)
     assert_operator StackProf::Tag.check, :==, { too_long_key => :bar }
-    profile = StackProf.run(mode: :cpu, tags: [too_long_key]) do
-      math(10)
+    profile = StackProf.run(tags: [too_long_key]) do
+      math
     end
     StackProf::Tag.clear
     assert_operator StackProf::Tag.check, :==, {}
@@ -193,8 +193,8 @@ class StackProfTagsTest < MiniTest::Test
     truncated_val = ('a' * max_val_len)
     StackProf::Tag.set(foo: too_long_val)
     assert_operator StackProf::Tag.check, :==, { foo: too_long_val }
-    profile = StackProf.run(mode: :cpu, tags: %i[foo]) do
-      math(10)
+    profile = StackProf.run(tags: %i[foo]) do
+      math
     end
     StackProf::Tag.clear
     assert_operator StackProf::Tag.check, :==, {}
@@ -209,7 +209,7 @@ class StackProfTagsTest < MiniTest::Test
 
     too_many_tags = (max_tags + 1).times.map { :tag }
     error = assert_raises(ArgumentError) do
-      StackProf.run(mode: :cpu, tags: too_many_tags) {}
+      StackProf.run(tags: too_many_tags) {}
     end
     assert_equal 'exceeding maximum number of tags', error.message
 
@@ -217,12 +217,12 @@ class StackProfTagsTest < MiniTest::Test
     builtins_with_max_tags = (max_tags).times.map { :tag }
     builtins_with_max_tags  << :thread_id
     builtins_with_max_tags  << :fiber_id
-    StackProf.run(mode: :cpu, tags: builtins_with_max_tags) {}
+    StackProf.run(tags: builtins_with_max_tags) {}
   end
 
   def test_no_tags_set
     assert_operator StackProf::Tag.check, :==, {}
-    profile = StackProf.run(mode: :wall, tags: %i[foo]) do
+    profile = StackProf.run(tags: %i[foo]) do
       assert_operator StackProf::Tag.check, :==, {}
       math
     end
@@ -240,19 +240,19 @@ class StackProfTagsTest < MiniTest::Test
 
     profile = StackProf.run(mode: :cpu, tags: %i[thread_id foo], raw: true) do
       assert_operator StackProf::Tag.check, :==, { foo: :bar }
-      math(10)
+      math(2)
       Thread.new do
         sub_id = parse_thread_id(Thread.current)
-        math(10)
+        math(2)
         StackProf::Tag.set(foo: :baz)
         assert_operator StackProf::Tag.check, :==, { foo: :baz }
-        math(10)
+        math(2)
       end.join
       assert_operator StackProf::Tag.check, :==, { foo: :bar }
-      math(10)
+      math(4)
       StackProf::Tag.clear
       assert_operator StackProf::Tag.check, :==, {}
-      math(10)
+      math(2)
     end
 
     assert_equal true, profile.key?(:sample_tags)
@@ -273,22 +273,22 @@ class StackProfTagsTest < MiniTest::Test
     sub_id = ''
     StackProf::Tag.set(foo: :bar)
 
-    profile = StackProf.run(mode: :wall, tags: %i[fiber_id foo], raw: true) do
+    profile = StackProf.run(tags: %i[fiber_id foo], raw: true) do
       assert_operator StackProf::Tag.check, :==, { foo: :bar }
-      math
+      math(2)
       Fiber.new do
         sub_id = parse_fiber_id(Fiber.current)
         assert_operator StackProf::Tag.check, :==, {}
-        math
+        math(2)
         StackProf::Tag.set(foo: :baz)
         assert_operator StackProf::Tag.check, :==, { foo: :baz }
-        math
+        math(2)
       end.resume
       assert_operator StackProf::Tag.check, :==, { foo: :bar }
-      math
+      math(2)
       StackProf::Tag.clear
       assert_operator StackProf::Tag.check, :==, {}
-      math
+      math(2)
     end
 
     assert_equal true, profile.key?(:sample_tags)
@@ -307,14 +307,14 @@ class StackProfTagsTest < MiniTest::Test
 
 
   def test_tagged_funtions_do_not_skew
-    profile = StackProf.run(mode: :cpu, tags: %i[thread_id function], raw: true) do
+    profile = StackProf.run(tags: %i[thread_id function], raw: true) do
       5.times do
-        math(5)
+        math
         fast_function
-        math(5)
+        math
         slow_function
       end
-      math(5)
+      math
     end
 
     assert_equal true, profile.key?(:sample_tags)
@@ -413,19 +413,19 @@ class StackProfTagsTest < MiniTest::Test
     assert_operator StackProf::Tag.check, :==, { foo: :bar, spam: :eggs }
 
     profile = StackProf.run(mode: :cpu, tags: %i[thread_id foo spam], raw: true) do
-      math(10)
+      math(2)
       Thread.new do
         sub_id = parse_thread_id(Thread.current)
         assert_operator StackProf::Tag.check, :==, { foo: :bar, spam: :eggs }
-        math(10)
+        math(2)
         StackProf::Tag.set(foo: :baz)
         assert_operator StackProf::Tag.check, :==, { foo: :baz, spam: :eggs }
-        math(10)
+        math(2)
       end.join
-      math(10)
+      math(4)
       StackProf::Tag.clear
       assert_operator StackProf::Tag.check, :==, {}
-      math(10)
+      math(2)
     end
 
     assert_equal true, profile.key?(:sample_tags)
@@ -457,19 +457,19 @@ class StackProfTagsTest < MiniTest::Test
     assert_equal false, StackProf::Tag::Persistence.enabled
 
     profile = StackProf.run(mode: :cpu, tags: %i[thread_id foo spam], raw: true) do
-      math(10)
+      math(2)
       Thread.new do
         sub_id = parse_thread_id(Thread.current)
         assert_operator StackProf::Tag.check, :==, { }
-        math(10)
+        math(2)
         StackProf::Tag.set(foo: :baz)
         assert_operator StackProf::Tag.check, :==, { foo: :baz }
-        math(10)
+        math(2)
       end.join
-      math(10)
+      math(4)
       StackProf::Tag.clear
       assert_operator StackProf::Tag.check, :==, {}
-      math(10)
+      math(2)
     end
 
     assert_equal true, profile.key?(:sample_tags)
@@ -496,7 +496,7 @@ class StackProfTagsTest < MiniTest::Test
 
   def slow_function
     StackProf::Tag.with(function: :slow) do
-      math(8)
+      math(4)
     end
   end
 
@@ -544,6 +544,7 @@ class StackProfTagsTest < MiniTest::Test
     sampleTags = StackProf::Tags.from(profile)
 
     permitted_orders.each_with_index do |order, orderIdx|
+      sampleIdx = 0
       idx = 0
       acceptable = nil
       sampleTags.each do |tags|
@@ -565,7 +566,7 @@ class StackProfTagsTest < MiniTest::Test
     rc
   ensure
     unless rc
-      puts "Failed on sample #{sampleIdx - 1}/#{sampleTags.size} -> #{sampleTags[sampleIdx - 1]} != #{next_acceptable}"
+      puts "Failed on sample #{sampleIdx}/#{sampleTags.size} -> #{sampleTags[sampleIdx]} != #{next_acceptable}"
       puts "GC samples: #{profile[:gc_samples]}"
       puts "Tags were: #{StackProf::Tags.from(profile).inspect}\nraw: #{profile[:sample_tags].inspect}\nstrtab: #{profile[:tag_strings]}\n#{debugstr}"
     end
