@@ -481,6 +481,8 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
             st_foreach(_stackprof.sample_tags[n].tags, sample_tags_i, (st_data_t)tags);
             rb_ary_push(sample_tags, tags);
             rb_ary_push(sample_tags, ULONG2NUM(_stackprof.sample_tags[n].repeats));
+            st_free_table(_stackprof.sample_tags[n].tags);
+            _stackprof.sample_tags[n].tags = NULL;
         }
         rb_hash_aset(results, sym_sample_tags, sample_tags);
     }
@@ -746,6 +748,8 @@ stackprof_record_tags_for_sample(void)
 
     if (_stackprof.last_tagset_matches) {
         last_tag_data->repeats++;
+        st_free_table(tag_data.tags);
+        tag_data.tags = NULL;
     } else {
         _stackprof.sample_tags[_stackprof.sample_tags_len++] = tag_data;
     }
