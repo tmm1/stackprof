@@ -500,7 +500,6 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     _stackprof.current_ruby_thread_id = 0;
     _stackprof.overall_tags = 0;
     _stackprof.buffered_tagsets = 0;
-    _stackprof.buffer_count = 0;
     _stackprof.current_buffered_tags_count = 0;
 
     if (_stackprof.raw && _stackprof.raw_samples_len) {
