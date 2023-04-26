@@ -73,6 +73,17 @@ class StackProfTagsTest < MiniTest::Test
     assert_equal true, tag_order_matches(profile, [{}, { foo: 'bar' }, {}])
   end
 
+  def test_tag_with_helper_unsets_tags_after_exception
+    begin
+      StackProf::Tag.with(foo: :bar) do
+        assert_operator StackProf::Tag.check, :==, { foo: :bar }
+        raise
+      end
+    rescue
+    end
+    assert_operator StackProf::Tag.check, :==, { }
+  end
+
   def test_tag_sample_from_custom_tag_source
     custom_tag_source = :my_custom_tag_source
     StackProf::Tag.set(foo: :bar, tag_source: custom_tag_source)

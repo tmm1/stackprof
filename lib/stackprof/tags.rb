@@ -7,6 +7,7 @@ module StackProf
         before = check(tag_source: tag_source)
         set(**tags, tag_source: tag_source)
         yield
+      ensure
         Thread.current[tag_source] = before
       end
 
