@@ -84,6 +84,30 @@ class StackProfTagsTest < MiniTest::Test
     assert_operator StackProf::Tag.check, :==, { }
   end
 
+  def test_builtins_from_array_source_persist_between_runs
+    tags = [:thread_id, :foo]
+    StackProf::Tag.set(foo: :bar)
+    profile = StackProf.run(tags: tags) do
+      assert_operator StackProf::Tag.check, :==, { foo: :bar }
+      math
+    end
+
+    assert_equal true, profile.key?(:sample_tags)
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
+    assert_equal true, all_samples_have_tag(profile, :thread_id)
+
+    profile = StackProf.run(tags: tags) do
+      assert_operator StackProf::Tag.check, :==, { foo: :bar }
+      math
+    end
+
+    assert_equal true, profile.key?(:sample_tags)
+    assert_operator profile[:sample_tags].size, :>, 0
+    assert_equal profile[:samples], StackProf::Tags.from(profile).size
+    assert_equal true, all_samples_have_tag(profile, :thread_id)
+  end
+
   def test_tag_sample_from_custom_tag_source
     custom_tag_source = :my_custom_tag_source
     StackProf::Tag.set(foo: :bar, tag_source: custom_tag_source)

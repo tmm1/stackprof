@@ -178,7 +178,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     struct sigaction sa;
     struct itimerval timer;
     VALUE opts = Qnil, mode = Qnil, interval = Qnil, metadata = rb_hash_new(), out = Qfalse;
-    VALUE tag_source = Qnil, tags = Qnil;
+    VALUE tag_source = Qnil, tags_arg = Qnil, tags = Qnil;
     int ignore_gc = 0;
     int raw = 0, aggregate = 1;
     VALUE metadata_val;
@@ -222,9 +222,10 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
         }
 
         if (RTEST(rb_hash_aref(opts, sym_tags))) {
-            tags = rb_hash_aref(opts, sym_tags);
-            if (!RB_TYPE_P(tags, T_ARRAY))
+            tags_arg = rb_hash_aref(opts, sym_tags);
+            if (!RB_TYPE_P(tags_arg, T_ARRAY))
                 rb_raise(rb_eArgError, "tags should be an array");
+            tags = rb_ary_dup(tags_arg);
             if (rb_ary_includes(tags, sym_thread_id)) {
                 rb_ary_delete(tags, sym_thread_id);
                 _stackprof.tag_thread_id = Qtrue;
