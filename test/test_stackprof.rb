@@ -93,6 +93,7 @@ class StackProfTest < MiniTest::Test
   end
 
   def test_walltime
+    GC.disable
     profile = StackProf.run(mode: :wall) do
       idle
     end
@@ -104,6 +105,8 @@ class StackProfTest < MiniTest::Test
       assert_equal "StackProfTest#idle", frame[:name]
     end
     assert_in_delta 200, frame[:samples], 25
+  ensure
+    GC.enable
   end
 
   def test_custom
@@ -241,8 +244,12 @@ class StackProfTest < MiniTest::Test
     assert marking_frame
     assert sweeping_frame
 
-    assert_equal gc_frame[:total_samples], profile[:gc_samples]
-    assert_equal profile[:gc_samples], [gc_frame, marking_frame, sweeping_frame].map{|x| x[:samples] }.inject(:+)
+    # We can't guarantee a certain number of GCs to run, so just assert
+    # that it's within some kind of delta
+    assert_in_delta gc_frame[:total_samples], profile[:gc_samples], 2
+
+    # Lazy marking / sweeping can cause this math to not add up, so also use a delta
+    assert_in_delta profile[:gc_samples], [gc_frame, marking_frame, sweeping_frame].map{|x| x[:samples] }.inject(:+), 2
 
     assert_operator profile[:gc_samples], :>, 0
     assert_operator profile[:missed_samples], :<=, 25
