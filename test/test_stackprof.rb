@@ -145,10 +145,13 @@ class StackProfTest < MiniTest::Test
     after_monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
 
     raw = profile[:raw]
+    raw_lines = profile[:raw_lines]
     assert_equal 10, raw[-1]
     assert_equal raw[0] + 2, raw.size
+    assert_equal 10, raw_lines[-1] # seen 10 times
 
     offset = RUBY_VERSION >= '3' ? -3 : -2
+    assert_equal 140, raw_lines[offset] # sample caller is on 140
     assert_includes profile[:frames][raw[offset]][:name], 'StackProfTest#test_raw'
 
     assert_equal 10, profile[:raw_sample_timestamps].size
