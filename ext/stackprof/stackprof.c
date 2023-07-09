@@ -102,7 +102,7 @@ static struct {
     VALUE metadata;
     int ignore_gc;
 
-    VALUE *raw_samples;
+    uint64_t *raw_samples;
     size_t raw_samples_len;
     size_t raw_samples_capa;
     size_t raw_sample_index;
@@ -133,7 +133,7 @@ static struct {
 
 static VALUE sym_object, sym_wall, sym_cpu, sym_custom, sym_name, sym_file, sym_line;
 static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_lines;
-static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_metadata, sym_frames, sym_ignore_gc, sym_out;
+static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_raw_lines, sym_metadata, sym_frames, sym_ignore_gc, sym_out;
 static VALUE sym_aggregate, sym_raw_sample_timestamps, sym_raw_timestamp_deltas, sym_state, sym_marking, sym_sweeping;
 static VALUE sym_gc_samples, objtracer;
 static VALUE gc_hook;
@@ -374,14 +374,23 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 	size_t len, n, o;
 	VALUE raw_sample_timestamps, raw_timestamp_deltas;
 	VALUE raw_samples = rb_ary_new_capa(_stackprof.raw_samples_len);
+	VALUE raw_lines = rb_ary_new_capa(_stackprof.raw_samples_len);
 
 	for (n = 0; n < _stackprof.raw_samples_len; n++) {
 	    len = (size_t)_stackprof.raw_samples[n];
 	    rb_ary_push(raw_samples, SIZET2NUM(len));
+	    rb_ary_push(raw_lines, SIZET2NUM(len));
 
-	    for (o = 0, n++; o < len; n++, o++)
-		rb_ary_push(raw_samples, PTR2NUM(_stackprof.raw_samples[n]));
+	    for (o = 0, n++; o < len; n++, o++) {
+		// Line is in the upper 16 bits
+		rb_ary_push(raw_lines, INT2NUM(_stackprof.raw_samples[n] >> 48));
+
+		VALUE frame = _stackprof.raw_samples[n] & ~((uint64_t)0xFFFF << 48);
+		rb_ary_push(raw_samples, PTR2NUM(frame));
+	    }
+
 	    rb_ary_push(raw_samples, SIZET2NUM((size_t)_stackprof.raw_samples[n]));
+	    rb_ary_push(raw_lines, SIZET2NUM((size_t)_stackprof.raw_samples[n]));
 	}
 
 	free(_stackprof.raw_samples);
@@ -391,6 +400,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 	_stackprof.raw_sample_index = 0;
 
 	rb_hash_aset(results, sym_raw, raw_samples);
+	rb_hash_aset(results, sym_raw_lines, raw_lines);
 
 	raw_sample_timestamps = rb_ary_new_capa(_stackprof.raw_sample_times_len);
 	raw_timestamp_deltas = rb_ary_new_capa(_stackprof.raw_sample_times_len);
@@ -520,7 +530,12 @@ stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t ti
 	     * in the frames buffer that came from Ruby. */
 	    for (i = num-1, n = 0; i >= 0; i--, n++) {
 		VALUE frame = _stackprof.frames_buffer[i];
-		if (_stackprof.raw_samples[_stackprof.raw_sample_index + 1 + n] != frame)
+		int line = _stackprof.lines_buffer[i];
+
+		// Encode the line in to the upper 16 bits.
+		uint64_t key = ((uint64_t)line << 48) | (uint64_t)frame;
+
+		if (_stackprof.raw_samples[_stackprof.raw_sample_index + 1 + n] != key)
 		    break;
 	    }
 	    if (i == -1) {
@@ -538,7 +553,12 @@ stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t ti
 	    _stackprof.raw_samples[_stackprof.raw_samples_len++] = (VALUE)num;
 	    for (i = num-1; i >= 0; i--) {
 		VALUE frame = _stackprof.frames_buffer[i];
-		_stackprof.raw_samples[_stackprof.raw_samples_len++] = frame;
+		int line = _stackprof.lines_buffer[i];
+
+		// Encode the line in to the upper 16 bits.
+		uint64_t key = ((uint64_t)line << 48) | (uint64_t)frame;
+
+		_stackprof.raw_samples[_stackprof.raw_samples_len++] = key;
 	    }
 	    _stackprof.raw_samples[_stackprof.raw_samples_len++] = (VALUE)1;
 	}
@@ -894,6 +914,7 @@ Init_stackprof(void)
     S(mode);
     S(interval);
     S(raw);
+    S(raw_lines);
     S(raw_sample_timestamps);
     S(raw_timestamp_deltas);
     S(out);
