@@ -120,6 +120,8 @@ static struct {
     size_t unrecorded_gc_sweeping_samples;
     st_table *frames;
 
+    timestamp_t gc_start_timestamp;
+
     VALUE fake_frame_names[TOTAL_FAKE_FRAMES];
     VALUE empty_string;
 
@@ -646,6 +648,7 @@ stackprof_buffer_sample(void)
     _stackprof.buffer_time.delta_usec = timestamp_delta;
 }
 
+// Postponed job
 void
 stackprof_record_gc_samples(void)
 {
@@ -653,8 +656,7 @@ stackprof_record_gc_samples(void)
     uint64_t start_timestamp = 0;
     size_t i;
     if (_stackprof.raw) {
-	struct timestamp_t t;
-	capture_timestamp(&t);
+	struct timestamp_t t = _stackprof.gc_start_timestamp;
 	start_timestamp = timestamp_usec(&t);
 
 	// We don't know when the GC samples were actually marked, so let's
@@ -775,6 +777,10 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 	    _stackprof.unrecorded_gc_marking_samples++;
 	} else if (mode == sym_sweeping) {
 	    _stackprof.unrecorded_gc_sweeping_samples++;
+	}
+	if(!_stackprof.unrecorded_gc_samples) {
+	    // record start
+	    capture_timestamp(&_stackprof.gc_start_timestamp);
 	}
 	_stackprof.unrecorded_gc_samples++;
 	rb_postponed_job_register_one(0, stackprof_job_record_gc, (void*)0);
