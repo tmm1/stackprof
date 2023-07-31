@@ -2,13 +2,15 @@
 require 'optparse'
 require 'stackprof'
 
+banner = <<-END
+Usage: stackprof run [--mode=MODE|--out=FILE|--interval=INTERVAL|--format=FORMAT] -- COMMAND
+Usage: stackprof [file.dump]+ [--text|--method=NAME|--callgrind|--graphviz]
+END
+
 if ARGV.first == "run"
   ARGV.shift
   env = {}
-  parser = OptionParser.new(ARGV) do |o|
-    o.banner = "Usage: stackprof run [--mode=MODE|--out=FILE|--interval=INTERVAL|--format=FORMAT] -- COMMAND"
-    o.banner = "Usage: stackprof [file.dump]+ [--text|--method=NAME|--callgrind|--graphviz]"
-
+  parser = OptionParser.new(banner) do |o|
     o.on('--mode [MODE]', String, 'Mode of sampling: cpu, wall, object, default to wall') do |mode|
       env["STACKPROF_MODE"] = mode
     end
@@ -37,10 +39,7 @@ if ARGV.first == "run"
 else
   options = {}
 
-  parser = OptionParser.new(ARGV) do |o|
-    o.banner = "Usage: stackprof run [--mode|--out|--interval] -- COMMAND"
-    o.banner = "Usage: stackprof [file.dump]+ [--text|--method=NAME|--callgrind|--graphviz]"
-
+  parser = OptionParser.new(banner) do |o|
     o.on('--text', 'Text summary per method (default)'){ options[:format] = :text }
     o.on('--json', 'JSON output (use with web viewers)'){ options[:format] = :json }
     o.on('--files', 'List of files'){ |f| options[:format] = :files }

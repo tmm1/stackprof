@@ -12,6 +12,7 @@
 #include <ruby/st.h>
 #include <ruby/io.h>
 #include <ruby/intern.h>
+#include <ruby/vm.h>
 #include <signal.h>
 #include <sys/time.h>
 #include <time.h>
@@ -32,6 +33,7 @@ static const char *fake_frame_cstrs[] = {
 };
 
 static int stackprof_use_postponed_job = 1;
+static int ruby_vm_running = 0;
 
 #define TOTAL_FAKE_FRAMES (sizeof(fake_frame_cstrs) / sizeof(char *))
 
@@ -100,7 +102,7 @@ static struct {
     VALUE metadata;
     int ignore_gc;
 
-    VALUE *raw_samples;
+    uint64_t *raw_samples;
     size_t raw_samples_len;
     size_t raw_samples_capa;
     size_t raw_sample_index;
@@ -118,6 +120,8 @@ static struct {
     size_t unrecorded_gc_sweeping_samples;
     st_table *frames;
 
+    timestamp_t gc_start_timestamp;
+
     VALUE fake_frame_names[TOTAL_FAKE_FRAMES];
     VALUE empty_string;
 
@@ -131,7 +135,7 @@ static struct {
 
 static VALUE sym_object, sym_wall, sym_cpu, sym_custom, sym_name, sym_file, sym_line;
 static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_lines;
-static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_metadata, sym_frames, sym_ignore_gc, sym_out;
+static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_raw_lines, sym_metadata, sym_frames, sym_ignore_gc, sym_out;
 static VALUE sym_aggregate, sym_raw_sample_timestamps, sym_raw_timestamp_deltas, sym_state, sym_marking, sym_sweeping;
 static VALUE sym_gc_samples, objtracer;
 static VALUE gc_hook;
@@ -372,14 +376,23 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 	size_t len, n, o;
 	VALUE raw_sample_timestamps, raw_timestamp_deltas;
 	VALUE raw_samples = rb_ary_new_capa(_stackprof.raw_samples_len);
+	VALUE raw_lines = rb_ary_new_capa(_stackprof.raw_samples_len);
 
 	for (n = 0; n < _stackprof.raw_samples_len; n++) {
 	    len = (size_t)_stackprof.raw_samples[n];
 	    rb_ary_push(raw_samples, SIZET2NUM(len));
+	    rb_ary_push(raw_lines, SIZET2NUM(len));
 
-	    for (o = 0, n++; o < len; n++, o++)
-		rb_ary_push(raw_samples, PTR2NUM(_stackprof.raw_samples[n]));
+	    for (o = 0, n++; o < len; n++, o++) {
+		// Line is in the upper 16 bits
+		rb_ary_push(raw_lines, INT2NUM(_stackprof.raw_samples[n] >> 48));
+
+		VALUE frame = _stackprof.raw_samples[n] & ~((uint64_t)0xFFFF << 48);
+		rb_ary_push(raw_samples, PTR2NUM(frame));
+	    }
+
 	    rb_ary_push(raw_samples, SIZET2NUM((size_t)_stackprof.raw_samples[n]));
+	    rb_ary_push(raw_lines, SIZET2NUM((size_t)_stackprof.raw_samples[n]));
 	}
 
 	free(_stackprof.raw_samples);
@@ -389,6 +402,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 	_stackprof.raw_sample_index = 0;
 
 	rb_hash_aset(results, sym_raw, raw_samples);
+	rb_hash_aset(results, sym_raw_lines, raw_lines);
 
 	raw_sample_timestamps = rb_ary_new_capa(_stackprof.raw_sample_times_len);
 	raw_timestamp_deltas = rb_ary_new_capa(_stackprof.raw_sample_times_len);
@@ -518,7 +532,12 @@ stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t ti
 	     * in the frames buffer that came from Ruby. */
 	    for (i = num-1, n = 0; i >= 0; i--, n++) {
 		VALUE frame = _stackprof.frames_buffer[i];
-		if (_stackprof.raw_samples[_stackprof.raw_sample_index + 1 + n] != frame)
+		int line = _stackprof.lines_buffer[i];
+
+		// Encode the line in to the upper 16 bits.
+		uint64_t key = ((uint64_t)line << 48) | (uint64_t)frame;
+
+		if (_stackprof.raw_samples[_stackprof.raw_sample_index + 1 + n] != key)
 		    break;
 	    }
 	    if (i == -1) {
@@ -536,7 +555,12 @@ stackprof_record_sample_for_stack(int num, uint64_t sample_timestamp, int64_t ti
 	    _stackprof.raw_samples[_stackprof.raw_samples_len++] = (VALUE)num;
 	    for (i = num-1; i >= 0; i--) {
 		VALUE frame = _stackprof.frames_buffer[i];
-		_stackprof.raw_samples[_stackprof.raw_samples_len++] = frame;
+		int line = _stackprof.lines_buffer[i];
+
+		// Encode the line in to the upper 16 bits.
+		uint64_t key = ((uint64_t)line << 48) | (uint64_t)frame;
+
+		_stackprof.raw_samples[_stackprof.raw_samples_len++] = key;
 	    }
 	    _stackprof.raw_samples[_stackprof.raw_samples_len++] = (VALUE)1;
 	}
@@ -624,6 +648,7 @@ stackprof_buffer_sample(void)
     _stackprof.buffer_time.delta_usec = timestamp_delta;
 }
 
+// Postponed job
 void
 stackprof_record_gc_samples(void)
 {
@@ -631,8 +656,7 @@ stackprof_record_gc_samples(void)
     uint64_t start_timestamp = 0;
     size_t i;
     if (_stackprof.raw) {
-	struct timestamp_t t;
-	capture_timestamp(&t);
+	struct timestamp_t t = _stackprof.gc_start_timestamp;
 	start_timestamp = timestamp_usec(&t);
 
 	// We don't know when the GC samples were actually marked, so let's
@@ -725,6 +749,11 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 
     if (!_stackprof.running) return;
 
+    // There's a possibility that the signal handler is invoked *after* the Ruby
+    // VM has been shut down (e.g. after ruby_cleanup(0)). In this case, things
+    // that rely on global VM state (e.g. rb_during_gc) will segfault.
+    if (!ruby_vm_running) return;
+
     if (_stackprof.mode == sym_wall) {
         // In "wall" mode, the SIGALRM signal will arrive at an arbitrary thread.
         // In order to provide more useful results, especially under threaded web
@@ -748,6 +777,10 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 	    _stackprof.unrecorded_gc_marking_samples++;
 	} else if (mode == sym_sweeping) {
 	    _stackprof.unrecorded_gc_sweeping_samples++;
+	}
+	if(!_stackprof.unrecorded_gc_samples) {
+	    // record start
+	    capture_timestamp(&_stackprof.gc_start_timestamp);
 	}
 	_stackprof.unrecorded_gc_samples++;
 	rb_postponed_job_register_one(0, stackprof_job_record_gc, (void*)0);
@@ -804,6 +837,11 @@ stackprof_gc_mark(void *data)
 
     if (_stackprof.frames)
 	st_foreach(_stackprof.frames, frame_mark_i, 0);
+
+    int i;
+    for (i = 0; i < _stackprof.buffer_count; i++) {
+        rb_gc_mark(_stackprof.frames_buffer[i]);
+    }
 }
 
 static void
@@ -845,6 +883,12 @@ stackprof_use_postponed_job_l(VALUE self)
     return Qnil;
 }
 
+static void
+stackprof_at_exit(ruby_vm_t* vm)
+{
+    ruby_vm_running = 0;
+}
+
 void
 Init_stackprof(void)
 {
@@ -854,6 +898,9 @@ Init_stackprof(void)
     * See https://github.com/ruby/ruby/commit/0e276dc458f94d9d79a0f7c7669bde84abe80f21
     */
     stackprof_use_postponed_job = RUBY_API_VERSION_MAJOR < 3;
+
+    ruby_vm_running = 1;
+    ruby_vm_at_exit(stackprof_at_exit);
 
 #define S(name) sym_##name = ID2SYM(rb_intern(#name));
     S(object);
@@ -873,6 +920,7 @@ Init_stackprof(void)
     S(mode);
     S(interval);
     S(raw);
+    S(raw_lines);
     S(raw_sample_timestamps);
     S(raw_timestamp_deltas);
     S(out);

@@ -2,7 +2,7 @@ $:.unshift File.expand_path('../../lib', __FILE__)
 require 'stackprof'
 require 'stackprof/middleware'
 require 'minitest/autorun'
-require 'mocha/setup'
+require 'tmpdir'
 
 class StackProf::MiddlewareTest < MiniTest::Test
 
@@ -19,23 +19,36 @@ class StackProf::MiddlewareTest < MiniTest::Test
   end
 
   def test_save_default
-    StackProf::Middleware.new(Object.new)
-
-    StackProf.stubs(:results).returns({ mode: 'foo' })
-    FileUtils.expects(:mkdir_p).with('tmp/')
-    File.expects(:open).with(regexp_matches(/^tmp\/stackprof-foo/), 'wb')
-
-    StackProf::Middleware.save
+    middleware = StackProf::Middleware.new(->(env) { 100.times { Object.new } },
+                                          save_every: 1,
+                                          enabled: true)
+    Dir.mktmpdir do |dir|
+      Dir.chdir(dir) { middleware.call({}) }
+      dir = File.join(dir, "tmp")
+      assert File.directory? dir
+      profile = Dir.entries(dir).reject { |x| File.directory?(x) }.first
+      assert profile
+      assert_equal "stackprof", profile.split("-")[0]
+      assert_equal "cpu", profile.split("-")[1]
+      assert_equal Process.pid.to_s, profile.split("-")[2]
+    end
   end
 
   def test_save_custom
-    StackProf::Middleware.new(Object.new, { path: 'foo/' })
-
-    StackProf.stubs(:results).returns({ mode: 'foo' })
-    FileUtils.expects(:mkdir_p).with('foo/')
-    File.expects(:open).with(regexp_matches(/^foo\/stackprof-foo/), 'wb')
-
-    StackProf::Middleware.save
+    middleware = StackProf::Middleware.new(->(env) { 100.times { Object.new } },
+                                          path: "foo/",
+                                          save_every: 1,
+                                          enabled: true)
+    Dir.mktmpdir do |dir|
+      Dir.chdir(dir) { middleware.call({}) }
+      dir = File.join(dir, "foo")
+      assert File.directory? dir
+      profile = Dir.entries(dir).reject { |x| File.directory?(x) }.first
+      assert profile
+      assert_equal "stackprof", profile.split("-")[0]
+      assert_equal "cpu", profile.split("-")[1]
+      assert_equal Process.pid.to_s, profile.split("-")[2]
+    end
   end
 
   def test_enabled_should_use_a_proc_if_passed
@@ -70,4 +83,4 @@ class StackProf::MiddlewareTest < MiniTest::Test
     StackProf::Middleware.new(Object.new, metadata: metadata)
     assert_equal metadata, StackProf::Middleware.metadata
   end
-end
+end unless RUBY_ENGINE == 'truffleruby'
