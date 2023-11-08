@@ -4,7 +4,7 @@ require 'minitest/autorun'
 require 'tempfile'
 require 'pathname'
 
-class StackProfTest < MiniTest::Test
+class StackProfTest < Minitest::Test
   def setup
     Object.new # warm some caches to avoid flakiness
   end

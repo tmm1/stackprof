@@ -4,7 +4,7 @@ require 'stackprof/middleware'
 require 'minitest/autorun'
 require 'tmpdir'
 
-class StackProf::MiddlewareTest < MiniTest::Test
+class StackProf::MiddlewareTest < Minitest::Test
 
   def test_path_default
     StackProf::Middleware.new(Object.new)

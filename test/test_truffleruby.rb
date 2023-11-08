@@ -3,7 +3,7 @@ require 'stackprof'
 require 'minitest/autorun'
 
 if RUBY_ENGINE == 'truffleruby'
-  class StackProfTruffleRubyTest < MiniTest::Test
+  class StackProfTruffleRubyTest < Minitest::Test
     def test_error
       error = assert_raises RuntimeError do
         StackProf.run(mode: :cpu) do
