@@ -2,7 +2,7 @@ $:.unshift File.expand_path('../../lib', __FILE__)
 require 'stackprof'
 require 'minitest/autorun'
 
-class ReportDumpTest < MiniTest::Test
+class ReportDumpTest < Minitest::Test
   require 'stringio'
 
   def test_dump_to_stdout
@@ -33,7 +33,7 @@ class ReportDumpTest < MiniTest::Test
   end
 end
 
-class ReportReadTest < MiniTest::Test
+class ReportReadTest < Minitest::Test
   require 'pathname'
 
   def test_from_file_read_json
