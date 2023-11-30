@@ -844,6 +844,12 @@ stackprof_gc_mark(void *data)
     }
 }
 
+static size_t
+stackprof_memsize(const void *data)
+{
+    return sizeof(_stackprof);
+}
+
 static void
 stackprof_atfork_prepare(void)
 {
@@ -888,6 +894,15 @@ stackprof_at_exit(ruby_vm_t* vm)
 {
     ruby_vm_running = 0;
 }
+
+static const rb_data_type_t stackprof_type = {
+    "StackProf",
+    {
+        stackprof_gc_mark,
+        NULL,
+        stackprof_memsize,
+    }
+};
 
 void
 Init_stackprof(void)
@@ -936,8 +951,8 @@ Init_stackprof(void)
     /* Need to run this to warm the symbol table before we call this during GC */
     rb_gc_latest_gc_info(sym_state);
 
-    gc_hook = Data_Wrap_Struct(rb_cObject, stackprof_gc_mark, NULL, &_stackprof);
     rb_global_variable(&gc_hook);
+    gc_hook = TypedData_Wrap_Struct(rb_cObject, &stackprof_type, &_stackprof);
 
     _stackprof.raw_samples = NULL;
     _stackprof.raw_samples_len = 0;
