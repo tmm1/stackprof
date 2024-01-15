@@ -18,7 +18,7 @@ elsif RUBY_VERSION == "3.2.0"
 end
 
 module StackProf
-  VERSION = '0.2.25'
+  VERSION = '0.2.26'
 end
 
 StackProf.autoload :Report, "stackprof/report.rb"
