@@ -91,7 +91,19 @@ typedef struct {
     int64_t delta_usec;
 } sample_time_t;
 
+/* We need to ensure that various memory operations are visible across
+ * threads.  Ruby doesn't offer a portable way to do this sort of detection
+ * across all the Ruby versions we support, so we use something that casts a
+ * wide net (Clang, along with ICC, defines __GNUC__). */
+#if defined(__GNUC__) && defined(__ATOMIC_SEQ_CST)
+#define STACKPROF_HAVE_ATOMICS 1
+#else
+#define STACKPROF_HAVE_ATOMICS 0
+#endif
+
 static struct {
+    /* Access this field with the `STACKPROF_RUNNING` macro, below, since we
+     * can't properly express that this field has an atomic type. */
     int running;
     int raw;
     int aggregate;
@@ -133,6 +145,12 @@ static struct {
     pthread_t target_thread;
 } _stackprof;
 
+#if STACKPROF_HAVE_ATOMICS
+#define STACKPROF_RUNNING() __atomic_load_n(&_stackprof.running, __ATOMIC_ACQUIRE)
+#else
+#define STACKPROF_RUNNING() _stackprof.running
+#endif
+
 static VALUE sym_object, sym_wall, sym_cpu, sym_custom, sym_name, sym_file, sym_line;
 static VALUE sym_samples, sym_total_samples, sym_missed_samples, sym_edges, sym_lines;
 static VALUE sym_version, sym_mode, sym_interval, sym_raw, sym_raw_lines, sym_metadata, sym_frames, sym_ignore_gc, sym_out;
@@ -154,7 +172,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     int raw = 0, aggregate = 1;
     VALUE metadata_val;
 
-    if (_stackprof.running)
+    if (STACKPROF_RUNNING())
 	return Qfalse;
 
     rb_scan_args(argc, argv, "0:", &opts);
@@ -225,7 +243,13 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.metadata = metadata;
     _stackprof.out = out;
     _stackprof.target_thread = pthread_self();
+    /* We need to ensure previous initialization stores are visible across
+     * threads. */
+#if STACKPROF_HAVE_ATOMICS
+    __atomic_store_n(&_stackprof.running, 1, __ATOMIC_SEQ_CST);
+#else
     _stackprof.running = 1;
+#endif
 
     if (raw) {
 	capture_timestamp(&_stackprof.last_sample_at);
@@ -240,9 +264,15 @@ stackprof_stop(VALUE self)
     struct sigaction sa;
     struct itimerval timer;
 
+#if STACKPROF_HAVE_ATOMICS
+    int was_running = __atomic_exchange_n(&_stackprof.running, 0, __ATOMIC_SEQ_CST);
+    if (!was_running)
+        return Qfalse;
+#else
     if (!_stackprof.running)
 	return Qfalse;
     _stackprof.running = 0;
+#endif
 
     if (_stackprof.mode == sym_object) {
 	rb_tracepoint_disable(objtracer);
@@ -351,7 +381,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
 {
     VALUE results, frames;
 
-    if (!_stackprof.frames || _stackprof.running)
+    if (!_stackprof.frames || STACKPROF_RUNNING())
 	return Qnil;
 
     results = rb_hash_new();
@@ -455,7 +485,7 @@ stackprof_run(int argc, VALUE *argv, VALUE self)
 static VALUE
 stackprof_running_p(VALUE self)
 {
-    return _stackprof.running ? Qtrue : Qfalse;
+    return STACKPROF_RUNNING() ? Qtrue : Qfalse;
 }
 
 static inline frame_data_t *
@@ -719,7 +749,7 @@ stackprof_sample_and_record(void)
 static void
 stackprof_job_record_gc(void *data)
 {
-    if (!_stackprof.running) return;
+    if (!STACKPROF_RUNNING()) return;
 
     stackprof_record_gc_samples();
 }
@@ -727,7 +757,7 @@ stackprof_job_record_gc(void *data)
 static void
 stackprof_job_sample_and_record(void *data)
 {
-    if (!_stackprof.running) return;
+    if (!STACKPROF_RUNNING()) return;
 
     stackprof_sample_and_record();
 }
@@ -735,7 +765,7 @@ stackprof_job_sample_and_record(void *data)
 static void
 stackprof_job_record_buffer(void *data)
 {
-    if (!_stackprof.running) return;
+    if (!STACKPROF_RUNNING()) return;
 
     stackprof_record_buffer();
 }
@@ -747,7 +777,7 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 
     _stackprof.overall_signals++;
 
-    if (!_stackprof.running) return;
+    if (!STACKPROF_RUNNING()) return;
 
     // There's a possibility that the signal handler is invoked *after* the Ruby
     // VM has been shut down (e.g. after ruby_cleanup(0)). In this case, things
@@ -810,7 +840,7 @@ stackprof_newobj_handler(VALUE tpval, void *data)
 static VALUE
 stackprof_sample(VALUE self)
 {
-    if (!_stackprof.running)
+    if (!STACKPROF_RUNNING())
 	return Qfalse;
 
     _stackprof.overall_signals++;
@@ -854,7 +884,7 @@ static void
 stackprof_atfork_prepare(void)
 {
     struct itimerval timer;
-    if (_stackprof.running) {
+    if (STACKPROF_RUNNING()) {
 	if (_stackprof.mode == sym_wall || _stackprof.mode == sym_cpu) {
 	    memset(&timer, 0, sizeof(timer));
 	    setitimer(_stackprof.mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
@@ -866,7 +896,7 @@ static void
 stackprof_atfork_parent(void)
 {
     struct itimerval timer;
-    if (_stackprof.running) {
+    if (STACKPROF_RUNNING()) {
 	if (_stackprof.mode == sym_wall || _stackprof.mode == sym_cpu) {
 	    timer.it_interval.tv_sec = 0;
 	    timer.it_interval.tv_usec = NUM2LONG(_stackprof.interval);
