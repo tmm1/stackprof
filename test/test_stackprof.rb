@@ -305,6 +305,14 @@ class StackProfTest < Minitest::Test
     end
   end
 
+  def test_start_time
+    before_run_realtime = Process.clock_gettime(Process::CLOCK_REALTIME, :nanosecond)
+
+    profile = StackProf.run{}
+    assert profile[:start_time_nsecs] != nil
+    assert_operator profile[:start_time_nsecs], :>, before_run_realtime
+  end
+
   def math
     250_000.times do
       2 ** 10
