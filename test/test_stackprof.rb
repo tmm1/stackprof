@@ -10,11 +10,15 @@ class StackProfTest < Minitest::Test
   end
 
   def test_info
+    before_run_realtime = Process.clock_gettime(Process::CLOCK_REALTIME, :nanosecond)
+
     profile = StackProf.run{}
     assert_equal 1.2, profile[:version]
     assert_equal :wall, profile[:mode]
     assert_equal 1000, profile[:interval]
     assert_equal 0, profile[:samples]
+    assert profile[:start_time_nsecs] != nil
+    assert_operator profile[:start_time_nsecs], :>, before_run_realtime
   end
 
   def test_running
