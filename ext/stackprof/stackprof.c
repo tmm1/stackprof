@@ -107,6 +107,7 @@ static struct {
     size_t raw_samples_capa;
     size_t raw_sample_index;
 
+    struct timespec start_time;
     struct timestamp_t last_sample_at;
     sample_time_t *raw_sample_times;
     size_t raw_sample_times_len;
@@ -140,6 +141,7 @@ static VALUE sym_aggregate, sym_raw_sample_timestamps, sym_raw_timestamp_deltas,
 static VALUE sym_gc_samples, objtracer;
 static VALUE gc_hook;
 static VALUE rb_mStackProf;
+static VALUE sym_start_time_nsecs;
 
 static void stackprof_newobj_handler(VALUE, void*);
 static void stackprof_signal_handler(int sig, siginfo_t* sinfo, void* ucontext);
@@ -216,6 +218,8 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     } else {
 	rb_raise(rb_eArgError, "unknown profiler mode");
     }
+
+    clock_gettime(CLOCK_REALTIME, &_stackprof.start_time);
 
     _stackprof.running = 1;
     _stackprof.raw = raw;
@@ -357,6 +361,7 @@ stackprof_results(int argc, VALUE *argv, VALUE self)
     results = rb_hash_new();
     rb_hash_aset(results, sym_version, DBL2NUM(1.2));
     rb_hash_aset(results, sym_mode, _stackprof.mode);
+    rb_hash_aset(results, sym_start_time_nsecs, LL2NUM(_stackprof.start_time.tv_sec * NANOSECONDS_IN_SECOND + _stackprof.start_time.tv_nsec));
     rb_hash_aset(results, sym_interval, _stackprof.interval);
     rb_hash_aset(results, sym_samples, SIZET2NUM(_stackprof.overall_samples));
     rb_hash_aset(results, sym_gc_samples, SIZET2NUM(_stackprof.during_gc));
@@ -946,6 +951,7 @@ Init_stackprof(void)
     S(state);
     S(marking);
     S(sweeping);
+    S(start_time_nsecs);
 #undef S
 
     /* Need to run this to warm the symbol table before we call this during GC */
