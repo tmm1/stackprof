@@ -92,7 +92,7 @@ typedef struct {
 } sample_time_t;
 
 static struct {
-    int running;
+    volatile sig_atomic_t running;
     int raw;
     int aggregate;
 
@@ -217,7 +217,6 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	rb_raise(rb_eArgError, "unknown profiler mode");
     }
 
-    _stackprof.running = 1;
     _stackprof.raw = raw;
     _stackprof.aggregate = aggregate;
     _stackprof.mode = mode;
@@ -226,6 +225,8 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
     _stackprof.metadata = metadata;
     _stackprof.out = out;
     _stackprof.target_thread = pthread_self();
+    // Do this last since timer set above might expires
+    _stackprof.running = 1;
 
     if (raw) {
 	capture_timestamp(&_stackprof.last_sample_at);
