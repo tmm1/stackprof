@@ -209,34 +209,47 @@ module StackProf
       f.puts %{{"x":#{x},"y":#{y},"width":#{weight},"frame_id":#{addr},"frame":#{frame[:name].dump},"file":#{frame[:file].dump}}}
     end
 
+
+    WorkItem = Struct.new("WorkItem", :name, :stacks, :depth, :result, :pending_children_count)
     def convert_to_d3_flame_graph_format(name, stacks, depth)
-      weight = 0
-      children = []
-      stacks.chunk do |stack|
-        if depth == stack.length - 1
-          :leaf
-        else
-          stack[depth]
+      work_stack = []
+
+      # Initialize with the root call
+      result = { "name" => name, "value" => 0, "children" => [] }
+      work_stack.push(WorkItem.new(name, stacks, depth, result, nil))
+
+      until work_stack.empty?
+        work_item = work_stack.pop
+        if work_item.pending_children_count == 0
+          work_item.result["value"] += work_item.result["children"].sum { |c| c.result["value"] }
+          next
         end
-      end.each do |val, child_stacks|
-        if val == :leaf
-          child_stacks.each do |stack|
-            weight += stack.last
-          end
-        else
-          frame = @data[:frames][val]
-          child_name = "#{ frame[:name] } : #{ frame[:file] } : #{ frame[:line] }"
-          child_data = convert_to_d3_flame_graph_format(child_name, child_stacks, depth + 1)
-          weight += child_data["value"]
-          children << child_data
-        end
+
+        leaf_weight = 0
+        child_work_items = []
+
+        work_item.stacks.chunk { |stack| (work_item.depth == stack.length - 1) ? :leaf : stack[work_item.depth] }
+                 .each do |val, child_stacks|
+                    if val == :leaf
+                      leaf_weight += child_stacks.sum(&:last)
+                    else
+                      frame = @data[:frames][val]
+                      child_name = "#{frame[:name]} : #{frame[:file]} : #{frame[:line]}"
+                      child_result = { "name" => child_name, "value" => 0, "children" => [] }
+                      work_item.result["children"] << child_result
+                      child_work_items << WorkItem.new(child_name, child_stacks, work_item.depth + 1, child_result, nil)
+                    end
+                  end
+
+        work_item.result["value"] = leaf_weight
+
+        next if child_work_items.empty?
+
+        work_stack.push(WorkItem.new(work_item.name, work_item.stacks, work_item.depth, work_item.result, 0))
+        work_stack.concat(child_work_items.reverse)
       end
 
-      {
-        "name" => name,
-        "value" => weight,
-        "children" => children,
-      }
+      result
     end
 
     def print_d3_flamegraph(f=STDOUT, skip_common=true)
