@@ -10,10 +10,14 @@ module StackProf
 
     class << self
       def from_file(file)
-        if (content = IO.binread(file)).start_with?(MARSHAL_SIGNATURE)
-          new(Marshal.load(content))
-        else
-          from_json(JSON.parse(content))
+        File.open(file, 'rb') do |f|
+          signature_bytes = f.read(2)
+          f.rewind
+          if signature_bytes == MARSHAL_SIGNATURE
+            new(Marshal.load(f))
+          else
+            from_json(JSON.parse(f.read))
+          end
         end
       end
 
