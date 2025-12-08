@@ -225,7 +225,7 @@ stackprof_start(int argc, VALUE *argv, VALUE self)
 	sigaction(mode == sym_wall ? SIGALRM : SIGPROF, &sa, NULL);
 
 	timer.it_interval.tv_sec = 0;
-	timer.it_interval.tv_usec = NUM2LONG(interval);
+	timer.it_interval.tv_usec = NUM2UINT(interval);
 	timer.it_value = timer.it_interval;
 	setitimer(mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
     } else if (mode == sym_custom) {
@@ -899,7 +899,7 @@ stackprof_atfork_parent(void)
     if (STACKPROF_RUNNING()) {
 	if (_stackprof.mode == sym_wall || _stackprof.mode == sym_cpu) {
 	    timer.it_interval.tv_sec = 0;
-	    timer.it_interval.tv_usec = NUM2LONG(_stackprof.interval);
+	    timer.it_interval.tv_usec = NUM2UINT(_stackprof.interval);
 	    timer.it_value = timer.it_interval;
 	    setitimer(_stackprof.mode == sym_wall ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
 	}
