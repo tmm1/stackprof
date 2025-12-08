@@ -26,6 +26,16 @@
 #define FAKE_FRAME_MARK  INT2FIX(1)
 #define FAKE_FRAME_SWEEP INT2FIX(2)
 
+#ifdef HAVE_RB_POSTPONED_JOB_PREREGISTER
+static rb_postponed_job_handle_t job_record_gc, job_sample_and_record, job_record_buffer;
+
+# define preregister_job(job) (job = rb_postponed_job_preregister(0, stackprof_##job, (void*)0))
+# define trigger_job(job) rb_postponed_job_trigger(job)
+#else
+# define preregister_job(job) ((void*)0)
+# define trigger_job(job) rb_postponed_job_register_one(0, stackprof_##job, (void*)0)
+#endif
+
 static const char *fake_frame_cstrs[] = {
 	"(garbage collection)",
 	"(marking)",
@@ -813,16 +823,16 @@ stackprof_signal_handler(int sig, siginfo_t *sinfo, void *ucontext)
 	    capture_timestamp(&_stackprof.gc_start_timestamp);
 	}
 	_stackprof.unrecorded_gc_samples++;
-	rb_postponed_job_register_one(0, stackprof_job_record_gc, (void*)0);
+	trigger_job(job_record_gc);
     } else {
         if (stackprof_use_postponed_job) {
-            rb_postponed_job_register_one(0, stackprof_job_sample_and_record, (void*)0);
+            trigger_job(job_sample_and_record);
         } else {
             // Buffer a sample immediately, if an existing sample exists this will
             // return immediately
             stackprof_buffer_sample();
             // Enqueue a job to record the sample
-            rb_postponed_job_register_one(0, stackprof_job_record_buffer, (void*)0);
+            trigger_job(job_record_buffer);
         }
     }
     pthread_mutex_unlock(&lock);
@@ -1009,6 +1019,10 @@ Init_stackprof(void)
     rb_define_singleton_method(rb_mStackProf, "results", stackprof_results, -1);
     rb_define_singleton_method(rb_mStackProf, "sample", stackprof_sample, 0);
     rb_define_singleton_method(rb_mStackProf, "use_postponed_job!", stackprof_use_postponed_job_l, 0);
+
+    preregister_job(job_record_gc);
+    preregister_job(job_sample_and_record);
+    preregister_job(job_record_buffer);
 
     pthread_atfork(stackprof_atfork_prepare, stackprof_atfork_parent, stackprof_atfork_child);
 }
