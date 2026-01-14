@@ -51,9 +51,16 @@ class StackProfTest < Minitest::Test
 
     frame = profile[:frames].values.first
     assert_includes frame[:name], "StackProfTest#test_object_allocation"
-    assert_equal 2, frame[:samples]
+    if RUBY_VERSION >= '4'
+      assert_equal 4, frame[:samples]
+    else
+      assert_equal 2, frame[:samples]
+    end
     assert_includes [profile_base_line - 2, profile_base_line], frame[:line]
-    if RUBY_VERSION >= '3'
+    if RUBY_VERSION >= '4'
+      assert_equal [2, 2], frame[:lines][profile_base_line+1]
+      assert_equal [2, 2], frame[:lines][profile_base_line+2]
+    elsif RUBY_VERSION >= '3'
       assert_equal [2, 1], frame[:lines][profile_base_line+1]
       assert_equal [2, 1], frame[:lines][profile_base_line+2]
     else
@@ -151,7 +158,7 @@ class StackProfTest < Minitest::Test
     assert_equal 10, raw_lines[-1] # seen 10 times
 
     offset = RUBY_VERSION >= '3' ? -3 : -2
-    assert_equal 140, raw_lines[offset] # sample caller is on 140
+    assert_equal 147, raw_lines[offset] # sample caller is on 140
     assert_includes profile[:frames][raw[offset]][:name], 'StackProfTest#test_raw'
 
     assert_equal 10, profile[:raw_sample_timestamps].size
