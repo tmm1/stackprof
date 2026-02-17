@@ -265,6 +265,18 @@ class StackProfTest < Minitest::Test
     assert_operator profile[:missed_samples], :<=, 25
   end
 
+  def test_top_required
+    tmpfile = Tempfile.new(%w(stackprof-script .rb))
+    tmpfile.write("10.times { sleep 0.1 }\n")
+    tmpfile.flush
+    path = File.realpath(tmpfile.path)
+    ret = StackProf.run(interval: 10) do
+      require path
+    end
+    frame_names = ret[:frames].values.select { |f| f[:file] == path }.map { |f| f[:name] }
+    assert_equal ["block in <require:#{path}>", "<require:#{path}>"], frame_names
+  end
+
   def test_out
     tmpfile = Tempfile.new('stackprof-out')
     ret = StackProf.run(mode: :custom, out: tmpfile) do
