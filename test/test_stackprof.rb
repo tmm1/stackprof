@@ -265,6 +265,60 @@ class StackProfTest < Minitest::Test
     assert_operator profile[:missed_samples], :<=, 25
   end
 
+  # Regression test for a data race where the signal handler overwrites
+  # _stackprof.frames_buffer (via stackprof_buffer_sample/rb_profile_frames)
+  # while stackprof_record_gc_samples is using it to record GC fake frames.
+  #
+  # This causes the raw sample data to reference fake frame IDs (like
+  # FAKE_FRAME_GC) that never get added to the frames hash, because the
+  # frames table loop reads the clobbered buffer instead of the GC frames.
+  #
+  # The test uses a C-level hook (test_clobber_frames_buffer) that simulates
+  # the signal handler by zeroing _stackprof.frames_buffer between the raw
+  # serialization loop and the frames table loop in
+  # stackprof_record_sample_for_stack. On the unfixed code, this corrupts
+  # the GC frame recording. On the fixed code, GC frames use local arrays
+  # that are immune to the clobber.
+  def test_gc_frames_not_clobbered_by_signal_handler
+    StackProf.test_clobber_frames_buffer = true
+
+    profile = StackProf.run(interval: 100, raw: true) do
+      5.times do
+        GC.start
+      end
+    end
+
+    raw = profile[:raw]
+    frames = profile[:frames]
+
+    gc_frame = frames.values.find{ |f| f[:name] == "(garbage collection)" }
+    assert gc_frame, "expected (garbage collection) frame in frames hash but it was missing"
+
+    # Also verify that every frame referenced in raw exists in frames
+    missing_frames = []
+    if raw && raw.size > 0
+      i = 0
+      while i < raw.size
+        num = raw[i]
+        i += 1
+        num.times do
+          frame_id = raw[i]
+          unless frames.key?(frame_id)
+            missing_frames << frame_id
+          end
+          i += 1
+        end
+        i += 1 # skip count
+      end
+    end
+
+    assert_empty missing_frames,
+      "raw sample data references frame IDs not present in frames hash: #{missing_frames.uniq.inspect}. " \
+      "This indicates the signal handler clobbered frames_buffer during GC recording."
+  ensure
+    StackProf.test_clobber_frames_buffer = false
+  end
+
   def test_out
     tmpfile = Tempfile.new('stackprof-out')
     ret = StackProf.run(mode: :custom, out: tmpfile) do
