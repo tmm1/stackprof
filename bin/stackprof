@@ -19,7 +19,7 @@ if ARGV.first == "run"
       env['STACKPROF_OUT'] = out
     end
 
-    o.on('--interval [MILLISECONDS]', Integer, 'Mode-relative sample rate') do |interval|
+    o.on('--interval [MICROSECONDS]', Integer, 'Mode-relative sample rate') do |interval|
       env['STACKPROF_INTERVAL'] = interval.to_s
     end
 
